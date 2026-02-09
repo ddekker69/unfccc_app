@@ -11,9 +11,9 @@ import numpy as np
 import torch
 from pathlib import Path
 from config import EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE
-from pipeline_bootstrap import check_folders, check_dependencies
+from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
 import glob
-from embedding_store import EmbeddingStore
+from core.pipeline.embedding_store import EmbeddingStore
 import streamlit as st
 
 def chunk_text_intelligently(text, chunk_size=500, overlap=50):

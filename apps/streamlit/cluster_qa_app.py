@@ -1533,7 +1533,7 @@ st.sidebar.markdown(f"Using {len(df)} documents in analysis.")
 st.sidebar.subheader("📁 Document Management")
 
 # PDF Upload functionality
-from pdf_file_management import update_document_info
+from core.pipeline.pdf_file_management import update_document_info
 import pickle
 pdf_file = st.sidebar.file_uploader("Upload a PDF", type="pdf")
 
@@ -1552,7 +1552,7 @@ if os.path.exists(OUTPUT_PATH):
 # Legacy and checkpoint management
 st.sidebar.subheader("💾 Data Management")
 
-from pdf_file_management import save_as_new_file, load_and_overwrite
+from core.pipeline.pdf_file_management import save_as_new_file, load_and_overwrite
 
 if st.sidebar.button("Save as Checkpoint"):
     save_as_new_file()
@@ -1571,7 +1571,7 @@ if available_files:
 # Embedding generation
 st.sidebar.subheader("🧠 Embedding Generation")
 
-from build_embeddings import build_embeddings_incremental
+from scripts.build_embeddings import build_embeddings_incremental
 
 if st.sidebar.button("Build Embeddings"):
     with st.spinner("Building embeddings..."):
@@ -1586,7 +1586,7 @@ st.sidebar.subheader("🎯 Processing Pipeline")
 
 # Import the necessary functions
 try:
-    from prepare_plot_df import run_clustering_and_save
+    from scripts.prepare_plot_df import run_clustering_and_save
     
     if st.sidebar.button("Run Clustering"):
         with st.spinner("Running clustering..."):
@@ -1599,7 +1599,7 @@ except ImportError:
     st.sidebar.error("❌ Clustering function not available")
 
 try:
-    from prepare_enhanced_index import prepare_enhanced_indexes
+    from scripts.prepare_enhanced_index import prepare_enhanced_indexes
     
     if st.sidebar.button("Build Enhanced Indexes"):
         with st.spinner("Preparing indexes..."):

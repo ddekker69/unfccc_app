@@ -7,9 +7,9 @@ import hdbscan
 import pickle
 import os
 from sentence_transformers import SentenceTransformer
-from pipeline_bootstrap import check_folders, check_dependencies
+from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
 from utils.azure_blob_utils import upload_blob
-from embedding_store import EmbeddingStore
+from core.pipeline.embedding_store import EmbeddingStore
 # Azure container
 from config import AZURE_CONTAINER_NAME, EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE, OUTPUT_PATH
 import streamlit as st

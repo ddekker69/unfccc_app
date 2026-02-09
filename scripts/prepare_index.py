@@ -19,7 +19,7 @@ if sys.stdout.encoding is None or "UTF-8" not in sys.stdout.encoding.upper():
 
 from utils.azure_blob_utils import upload_blob
 from config import AZURE_CONTAINER_NAME, EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE
-from pipeline_bootstrap import check_folders, check_dependencies
+from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
 
 check_folders()
 check_dependencies()

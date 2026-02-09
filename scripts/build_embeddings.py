@@ -6,10 +6,10 @@ Rerunning is incremental: only unseen doc_ids are processed.
 import pickle, numpy as np, pandas as pd
 from pathlib import Path
 from utils.azure_blob_utils import upload_blob
-from embedding_store import EmbeddingStore, EMB_FILE, CHUNK_FILE, CHUNK_EMB_FILE
+from core.pipeline.embedding_store import EmbeddingStore, EMB_FILE, CHUNK_FILE, CHUNK_EMB_FILE
 from config import EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE
-from pipeline_bootstrap import check_folders, check_dependencies
-from prepare_enhanced_index import chunk_text_intelligently   # reuse existing splitter
+from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
+from scripts.prepare_enhanced_index import chunk_text_intelligently   # reuse existing splitter
 import shutil
 import streamlit as st
 

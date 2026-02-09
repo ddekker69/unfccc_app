@@ -26,7 +26,7 @@ if sys.stdout.encoding is None or "UTF-8" not in sys.stdout.encoding.upper():
         sys.stdout.reconfigure(encoding="utf-8")
     except AttributeError:
         pass
-from prepare_enhanced_index import chunk_text_intelligently
+from scripts.prepare_enhanced_index import chunk_text_intelligently
 from config import EMBEDDING_MODEL_NAME
 
 logging.basicConfig(level=logging.INFO)

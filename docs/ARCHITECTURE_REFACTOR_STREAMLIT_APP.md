@@ -19,6 +19,15 @@ unfccc/
 │   ├── rag_engine.py
 │   ├── rag_pipeline.py
 │   └── ultra_fast_rag.py
+├── core/pipeline/
+│   ├── embedding_store.py
+│   ├── pipeline_bootstrap.py
+│   └── pdf_file_management.py
+├── scripts/
+│   ├── automated_pipeline.py
+│   ├── prepare_enhanced_index.py
+│   ├── prepare_plot_df.py
+│   └── ... (other operational scripts)
 └── legacy wrapper modules at root (same original filenames)
 ```
 
@@ -58,6 +67,8 @@ New code should import from the new package paths:
 
 - App/UI: `apps.streamlit.*`
 - RAG services: `core.rag.*`
+- Pipeline helpers: `core.pipeline.*`
+- Operational scripts: `scripts.*`
 - Shared settings: `core.config.settings`
 
 Legacy top-level imports remain supported for backward compatibility, but should be treated as transitional.

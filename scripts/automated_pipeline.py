@@ -42,10 +42,10 @@ import faiss
 import gc
 import torch
 from sentence_transformers import SentenceTransformer
-from prepare_enhanced_index import chunk_text_intelligently
+from scripts.prepare_enhanced_index import chunk_text_intelligently
 from utils.country_detection import extract_country
 from utils.azure_blob_utils import upload_blob
-from pipeline_bootstrap import check_folders, check_dependencies
+from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
 from config import (
     EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE, AZURE_CONTAINER_NAME,
     OUTPUT_PATH
@@ -838,7 +838,7 @@ def build_enhanced_indexes(force=False):
     print("🚀 Building enhanced indexes for ultra-fast RAG (5-20x faster queries)...")
     
     # Import enhanced indexing functions
-    from prepare_enhanced_index import (
+    from scripts.prepare_enhanced_index import (
         chunk_text_intelligently, 
         extract_document_title_from_content,
         create_document_summary,

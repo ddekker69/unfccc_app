@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 from config import EMBEDDING_MODEL_NAME
 import umap.umap_ as umap
 import hdbscan
-from prepare_enhanced_index import chunk_text_intelligently
+from scripts.prepare_enhanced_index import chunk_text_intelligently
 import sys
 
 # Ensure stdout can display emoji on Windows CMD

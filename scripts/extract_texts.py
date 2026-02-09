@@ -20,7 +20,7 @@ import re
 import logging
 import streamlit as st
 from utils.country_detection import extract_country
-from pipeline_bootstrap import check_folders, check_dependencies, check_dataframe
+from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies, check_dataframe
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import PDF_DIR, CSV_PATH, OUTPUT_PATH, UPLOAD_PDF_DIR, CHECKPOINTS_DIR, OUTPUT_PATH_LEGACY

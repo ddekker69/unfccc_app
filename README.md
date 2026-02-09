@@ -11,6 +11,8 @@ unfccc/
 ├── apps/streamlit/      # Streamlit UI + headless app workflows
 ├── core/config/         # Shared runtime settings (UI-optional)
 ├── core/rag/            # Retrieval and answer generation engine
+├── core/pipeline/       # Shared preprocessing/storage helpers
+├── scripts/             # Operational preprocessing/indexing scripts
 ├── docs/                # Architecture and technical documentation
 ├── examples/            # Ad-hoc demos and tutorial scripts
 └── *.py                 # Backward-compatible wrapper entrypoints
@@ -69,7 +71,7 @@ set OPENAI_API_KEY=sk-proj-YOUR_ACTUAL_KEY_HERE
 
 **📖 Detailed setup guide**: [`SECURITY_SETUP.md`](SECURITY_SETUP.md)
 
-**✅ Test your setup**: `python test_api_setup.py`
+**✅ Test your setup**: `python scripts/test_api_setup.py`
 
 **🆕 Note for Windows users:** All command line scripts automatically
 reconfigure the console encoding to UTF-8 so emoji output works without
@@ -78,10 +80,10 @@ reconfigure the console encoding to UTF-8 so emoji output works without
 ### 3. Run Pipeline
 ```bash
 # Process documents and build indexes (includes enhanced country extraction)
-python automated_pipeline.py
+python scripts/automated_pipeline.py
 
 # Enable ultra-fast mode (5-20x faster queries, now integrated!)
-python automated_pipeline.py  # Ultra-fast indexes built automatically
+python scripts/automated_pipeline.py  # Ultra-fast indexes built automatically
 
 # Launch application
 streamlit run cluster_qa_app.py
@@ -237,13 +239,13 @@ python working_headless_processor.py questions.txt output.txt \
 ### **Full Pipeline** (Recommended)
 ```bash
 # Complete pipeline with standard + enhanced indexes
-python automated_pipeline.py
+python scripts/automated_pipeline.py
 
 # Enhanced indexes only (ultra-fast RAG mode)
-python automated_pipeline.py --enhanced-only
+python scripts/automated_pipeline.py --enhanced-only
 
 # Skip enhanced indexes (standard mode only)
-python automated_pipeline.py --skip-enhanced
+python scripts/automated_pipeline.py --skip-enhanced
 ```
 
 ### **🆕 Enhanced Clustering**
@@ -288,16 +290,16 @@ python working_headless_processor.py questions.txt output.txt \
 ### **Individual Steps**
 ```bash
 # Text extraction with enhanced country detection
-python automated_pipeline.py --skip-clustering --skip-indexing --skip-enhanced --skip-app
+python scripts/automated_pipeline.py --skip-clustering --skip-indexing --skip-enhanced --skip-app
 
 # Clustering only
-python automated_pipeline.py --skip-extraction --skip-indexing --skip-enhanced --skip-app
+python scripts/automated_pipeline.py --skip-extraction --skip-indexing --skip-enhanced --skip-app
 
 # Standard indexes only
-python automated_pipeline.py --skip-extraction --skip-clustering --skip-enhanced --skip-app
+python scripts/automated_pipeline.py --skip-extraction --skip-clustering --skip-enhanced --skip-app
 
 # Enhanced indexes only (ultra-fast RAG)
-python automated_pipeline.py --skip-extraction --skip-clustering --skip-indexing --skip-app
+python scripts/automated_pipeline.py --skip-extraction --skip-clustering --skip-indexing --skip-app
 
 # Verification
 python final_verification.py
@@ -306,11 +308,11 @@ python final_verification.py
 ### **Offline Mode**
 ```bash
 # Run completely offline (skip all Azure uploads)
-python automated_pipeline.py --offline
+python scripts/automated_pipeline.py --offline
 
 # Force offline for Hugging Face models
 export HF_HUB_OFFLINE=1
-python automated_pipeline.py --offline
+python scripts/automated_pipeline.py --offline
 ```
 
 ### **Ultra-Fast RAG Features**
@@ -341,7 +343,7 @@ See [`OFFLINE_MODE.md`](OFFLINE_MODE.md) for details.
 ### **Common Issues**
 - **Missing data**: Run `python check_data.py` to verify setup
 - **Country coverage**: Run `python final_verification.py` to check extraction results
-- **Slow performance**: Run `python prepare_enhanced_index.py`
+- **Slow performance**: Run `python scripts/prepare_enhanced_index.py`
 - **Windows issues**: Use `setup_environment.bat` for automated setup
 - **Memory issues**: System auto-detects RAM and suggests compatible models
 
