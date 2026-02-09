@@ -11,6 +11,8 @@ unfccc/
 ├── apps/streamlit/      # Streamlit UI + headless app workflows
 ├── core/config/         # Shared runtime settings (UI-optional)
 ├── core/rag/            # Retrieval and answer generation engine
+├── docs/                # Architecture and technical documentation
+├── examples/            # Ad-hoc demos and tutorial scripts
 └── *.py                 # Backward-compatible wrapper entrypoints
 ```
 
