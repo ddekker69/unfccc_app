@@ -35,6 +35,15 @@ unfccc/
 
 Root-level files (`cluster_qa_app.py`, `rag_engine.py`, `rag_pipeline.py`, `ultra_fast_rag.py`, `config.py`) remain thin wrappers so existing commands still work.
 
+## Current UI Policy
+
+- `apps/streamlit/cluster_qa_app.py` is maintained as the canonical app implementation.
+- The UI is intentionally streamlined around the current production workflow:
+  - Ultra-fast retrieval/index path first
+  - reduced legacy/debug toggles in sidebar
+  - curated model list focused on modern local instruct models plus `gpt-4o`
+- `cluster_qa_app.py` remains a compatibility wrapper entrypoint.
+
 ## Import Guidance
 
 Prefer these imports for new code:

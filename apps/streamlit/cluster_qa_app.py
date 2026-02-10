@@ -342,27 +342,11 @@ import networkx as nx
 from pyvis.network import Network
 import numpy as np
 import pandas as pd
-import torch
-
-# Remove debug output that should be conditional
-if st.sidebar.checkbox("🔧 Show System Info", value=False, help="Show technical system information"):
-    st.write("🔥 Torch version:", torch.__version__)
-    st.write("🧩 Torch classes:", dir(torch.classes))
-
-import openai
-if st.sidebar.checkbox("🔧 Show OpenAI Info", value=False, help="Show OpenAI version info") if 'openai' in locals() else False:
-    st.write("OpenAI version:", openai.__version__)
 
 from sentence_transformers import SentenceTransformer
 from utils.signed_graph import compute_signed_edge_list, compute_similarity_matrix
 from utils.data_loader import load_cluster_data
-from utils.debug_utils import (
-    debug_info, debug_success, debug_warning, debug_error,
-    debug_pipeline_start, debug_pipeline_complete, debug_context_info,
-    set_debug_mode, get_debug_status, create_debug_expander, debug_status_display
-)
-from ultra_fast_rag import ultra_fast_answer_question
-from rag_engine import answer_question as standard_answer_question, answer_cross_cluster_question, generate_cluster_summary
+from rag_engine import answer_cross_cluster_question, generate_cluster_summary
 from utils.reporting import generate_cluster_report, generate_cross_cluster_report, plot_cluster
 from utils.reporting_utils import convert_md_to_pdf_fallback, visualize_signed_graph_pyvis
 from utils.diagnostics import compute_extraction_diagnostics
@@ -377,63 +361,8 @@ from utils.metadata_utils import (
 from utils.plotting import plot_cluster_with_labels, plot_cluster_with_hover, plot_country_cluster_with_hover
 from utils.balance_correlation import calculate_balance_correlation_dekker
 
-from config import IS_STREAMLIT_CLOUD, LOCAL_MODEL_PATH, AZURE_CONTAINER_NAME, AZURE_MODEL_BLOB_NAME, EMBEDDING_MODEL_NAME, OPENAI_API_KEY, OPTIMAL_DEVICE, OUTPUT_PATH, CHECKPOINTS_DIR
+from config import IS_STREAMLIT_CLOUD, LOCAL_MODEL_PATH, AZURE_CONTAINER_NAME, AZURE_MODEL_BLOB_NAME, EMBEDDING_MODEL_NAME, OPENAI_API_KEY, OPTIMAL_DEVICE
 from utils.azure_blob_utils import download_and_extract_model_from_azure
-
-# === DEBUG CONTROL SECTION (Moved to top for proper execution) ===
-with st.sidebar:
-    st.markdown("---")
-    st.subheader("🔧 Debug Controls")
-    
-    # Initialize session state if not exists
-    if "global_debug_toggle" not in st.session_state:
-        st.session_state["global_debug_toggle"] = False
-    
-    # Global debug toggle
-    current_status = get_debug_status()
-    global_debug = st.checkbox("Enable Debug Mode", value=current_status["general"], key="global_debug_toggle")
-    
-    # Update the config debug status based on the checkbox
-    set_debug_mode(global_debug)
-    
-    if global_debug:
-        # Fine-grained controls
-        st.markdown("**Debug Categories:**")
-        debug_rag = st.checkbox("RAG Pipeline", value=current_status["rag"], key="debug_rag_toggle")
-        debug_search = st.checkbox("Search & Retrieval", value=current_status["search"], key="debug_search_toggle")
-        debug_generation = st.checkbox("Answer Generation", value=current_status["generation"], key="debug_generation_toggle")
-        debug_performance = st.checkbox("Performance Timing", value=current_status["performance"], key="debug_performance_toggle")
-        debug_embedding = st.checkbox("Embedding Operations", value=current_status["embedding"], key="debug_embedding_toggle")
-        
-        # Apply debug settings for individual categories
-        if global_debug:
-            # Set individual categories
-            set_debug_mode(debug_rag, ["rag"])
-            set_debug_mode(debug_search, ["search"])
-            set_debug_mode(debug_generation, ["generation"])
-            set_debug_mode(debug_performance, ["performance"])
-            set_debug_mode(debug_embedding, ["embedding"])
-        
-        st.success("✅ Debug settings applied automatically")
-        
-        # Test debug output to verify it's working - USE DIRECT st.info() to test monkey patching
-        st.info("🔍 **DEBUG-GENERAL**: Debug mode is ON - this message should appear when debug is enabled")
-        st.success("✅ **DEBUG-GENERAL**: Debug controls are working correctly!")
-        
-    else:
-        # Disable all debugging automatically
-        set_debug_mode(False)
-        st.info("ℹ️ Debug mode disabled")
-        
-        # This should NOT appear when debug is off - USE DIRECT st.info() to test monkey patching
-        st.info("🔍 **DEBUG-GENERAL**: This debug message should NOT appear when debug is disabled")
-    
-    # Show current status using regular streamlit instead of debug_status_display()
-    status = get_debug_status()
-    st.markdown("**Current Debug Status:**")
-    for category, enabled in status.items():
-        status_icon = "✅" if enabled else "❌"
-        st.markdown(f"• {category.title()}: {status_icon}")
 
 # === Helper Functions ===
 
@@ -447,14 +376,7 @@ def display_passages_enhanced(passages, df, cluster_id=None):
         return
         
     st.markdown(f"### 📚 Retrieved Passages ({len(passages)})")
-    
-    # Reduce debug noise - only show when explicitly needed
-    debug_mode = st.sidebar.checkbox("🔧 Show Passage Debug Info", value=False)
-    
-    if debug_mode and cluster_id is not None:
-        debug_info(f"Looking for documents in Cluster {cluster_id}")
-        cluster_docs = df[df['cluster'] == cluster_id]
-        debug_info(f"Found {len(cluster_docs)} documents in cluster {cluster_id} in the dataframe")
+    debug_mode = False
     
     for i, passage in enumerate(passages):
         # Check if this is an enhanced passage format (from ultra-fast pipeline)
@@ -472,14 +394,10 @@ def display_passages_enhanced(passages, df, cluster_id=None):
                 # Summary format: "📋 SUMMARY: Title (Country)"
                 title_part = header_line.replace("📋 SUMMARY:", "").strip()
                 title = f"📋 **Summary**: {title_part}"
-                if debug_mode:
-                    debug_info("Enhanced format - SUMMARY passage")
             elif "📄 EXCERPT:" in header_line:
                 # Excerpt format: "📄 EXCERPT: Title (Country) - chunk info"
                 title_part = header_line.replace("📄 EXCERPT:", "").strip()
                 title = f"📄 **Excerpt**: {title_part}"
-                if debug_mode:
-                    debug_info("Enhanced format - EXCERPT passage")
             else:
                 title = f"📄 **Enhanced Passage {i+1}**"
                 
@@ -492,12 +410,7 @@ def display_passages_enhanced(passages, df, cluster_id=None):
                     row_text = str(row.get('text', ''))
                     if len(row_text) > 100 and passage[:300] in row_text[:1000]:
                         doc_info = row
-                        if debug_mode:
-                            debug_info(f"Matched passage {i+1} to document: {row.get('title', 'Unknown')[:50]}...")
                         break
-                
-                if doc_info is None and debug_mode:
-                    debug_warning(f"Could not match passage {i+1} to any document in cluster {cluster_id}")
             
             # Create title for standard passages
             if doc_info is not None:
@@ -1367,53 +1280,19 @@ st.title("🌍 UNFCCC Cluster-Aware Climate QA System")
 # --- Sidebar Configuration ---
 st.sidebar.header("Configuration")
 
-# Add Pipeline Selection
-st.sidebar.subheader("🚀 RAG Pipeline Selection")
-pipeline_choice = st.sidebar.radio(
-    "Select Pipeline:",
-    [
-        "⚡ Ultra-Fast RAG (Enhanced Preprocessing)", 
-        "🐌 Standard RAG (Current System)"
-    ],
-    index=0,  # Default to ultra-fast
-    help="Ultra-Fast RAG uses pre-computed embeddings for 5-20x speedup when enhanced indexes are available"
-)
-
-# Show pipeline info
-if "Ultra-Fast" in pipeline_choice:
-    st.sidebar.success("✅ Using Ultra-Fast Pipeline")
-    st.sidebar.markdown("**Benefits:**")
-    st.sidebar.markdown("• 5-20x faster context generation")
-    st.sidebar.markdown("• Intelligent text chunking")
-    st.sidebar.markdown("• Dual-mode retrieval (overview/detailed)")
-    st.sidebar.markdown("• Comprehensive debugging")
-    
-    if not os.path.exists("indexes_enhanced"):
-        st.sidebar.warning("⚠️ Enhanced indexes not found")
-        st.sidebar.markdown("**To enable full speed:**")
-        st.sidebar.code("python scripts/prepare_enhanced_index.py")
-    else:
-        # Check if any enhanced indexes exist
-        enhanced_files = [f for f in os.listdir("indexes_enhanced") if f.endswith(".index")]
-        if enhanced_files:
-            st.sidebar.success(f"🎯 Found {len(enhanced_files)} enhanced indexes")
-        else:
-            st.sidebar.warning("⚠️ Enhanced indexes folder empty")
+st.sidebar.subheader("🚀 Pipeline")
+st.sidebar.success("Using Ultra-Fast RAG (recommended)")
+if not os.path.exists("indexes_enhanced"):
+    st.sidebar.warning("Enhanced indexes not found")
+    st.sidebar.code("python scripts/prepare_enhanced_index.py")
 else:
-    st.sidebar.info("ℹ️ Using Standard Pipeline")
-    st.sidebar.markdown("**Characteristics:**")
-    st.sidebar.markdown("• Real-time embedding computation")
-    st.sidebar.markdown("• Works with current FAISS indexes")
-    st.sidebar.markdown("• Slower but reliable fallback")
+    enhanced_files = [f for f in os.listdir("indexes_enhanced") if f.endswith(".index")]
+    if enhanced_files:
+        st.sidebar.caption(f"{len(enhanced_files)} enhanced indexes available")
 
 st.sidebar.divider()
 
 cluster_id = st.sidebar.selectbox("Select Cluster", sorted(plot_df['cluster'].unique()))
-
-# DEBUG: Show cluster information
-st.sidebar.info(f"🔍 **DEBUG**: Selected Cluster = {cluster_id}")
-available_clusters = sorted(plot_df['cluster'].unique())
-st.sidebar.info(f"🔍 **DEBUG**: Available clusters: {available_clusters[:10]}...")  # Show first 10
 
 # Model selection - show local models always, add OpenAI option when API key is available
 model_name = st.sidebar.selectbox(
@@ -1422,14 +1301,15 @@ model_name = st.sidebar.selectbox(
         "DeepSeek-R1-Distill-Qwen-14B (Recommended)",
         "DeepSeek-R1-Distill-Qwen-7B (Faster)",
         "DeepSeek-R1-Distill-Llama-8B (Alternative)",
-        "DeepSeek-LLM-7B-Chat (Fallback)",
+        "Qwen3-4B-Instruct (Fast Recommended)",
+        "Phi-4-mini-instruct (Efficient)",
+        "Qwen2.5-3B-Instruct (Light)",
+        "SmolLM2-1.7B-Instruct (Ultra Light)",
         "TinyLlama-1B (8GB RAM)",
-        "DistilGPT2 (Low Memory)", 
-        "FLAN-T5-Small (Ultra Light)",
         "gpt-4o"
     ],
     index=0,
-    help="Select the AI model for answer generation. Smaller models work better with limited RAM."
+    help="Select the answer model. DeepSeek gives strongest quality; Qwen/Phi/SmolLM2/TinyLlama are lighter and faster."
 )
 
 # Add model info
@@ -1438,7 +1318,7 @@ if model_name == "gpt-4o":
     st.sidebar.markdown("🌐 API-based • 🎯 High accuracy • 💰 Usage costs apply")
     model_name = "gpt-4o"  # Convert to the actual model name
 else:
-    st.sidebar.markdown("💡 **Using Local DeepSeek Models**")
+    st.sidebar.markdown("💡 **Using Local Models**")
     st.sidebar.markdown("✅ No API costs • 🔒 Private • ⚡ Fast on your hardware")
 
 # Response format selection
@@ -1525,91 +1405,6 @@ else:
 include_problematic = st.sidebar.checkbox("Include problematic documents", value=False)
 df = plot_df if include_problematic else plot_df[plot_df['status'] == 'ok']
 st.sidebar.markdown(f"Using {len(df)} documents in analysis.")
-
-# ===========================
-# NEW DETACHED EMBEDDINGS FUNCTIONALITY
-# ===========================
-
-st.sidebar.subheader("📁 Document Management")
-
-# PDF Upload functionality
-from core.pipeline.pdf_file_management import update_document_info
-import pickle
-pdf_file = st.sidebar.file_uploader("Upload a PDF", type="pdf")
-
-if pdf_file is not None:
-    st.sidebar.write(f"Uploaded file: {pdf_file.name}")
-    # Process the uploaded PDF
-    update_document_info(pdf_file)
-
-# Display summary of the uploaded documents
-if os.path.exists(OUTPUT_PATH):
-    with open(OUTPUT_PATH, 'rb') as f:
-        link_df = pickle.load(f)
-    
-    st.sidebar.info(f"Total documents: {len(link_df)}")
-
-# Legacy and checkpoint management
-st.sidebar.subheader("💾 Data Management")
-
-from core.pipeline.pdf_file_management import save_as_new_file, load_and_overwrite
-
-if st.sidebar.button("Save as Checkpoint"):
-    save_as_new_file()
-
-# Show available checkpoints and legacy
-available_files = ["extracted_texts_legacy"]
-if CHECKPOINTS_DIR.exists():
-    checkpoints = [f.stem for f in CHECKPOINTS_DIR.glob("checkpoint_*.pkl")]
-    available_files.extend(checkpoints)
-
-if available_files:
-    selected_file = st.sidebar.selectbox("Select file to restore:", available_files)
-    if st.sidebar.button("Restore Selected File"):
-        load_and_overwrite(selected_file)
-
-# Embedding generation
-st.sidebar.subheader("🧠 Embedding Generation")
-
-from scripts.build_embeddings import build_embeddings_incremental
-
-if st.sidebar.button("Build Embeddings"):
-    with st.spinner("Building embeddings..."):
-        try:
-            new_count = build_embeddings_incremental()
-            st.sidebar.success(f"✅ Generated embeddings for {new_count} new documents!")
-        except Exception as e:
-            st.sidebar.error(f"❌ Error building embeddings: {e}")
-
-# Clustering and indexing
-st.sidebar.subheader("🎯 Processing Pipeline")
-
-# Import the necessary functions
-try:
-    from scripts.prepare_plot_df import run_clustering_and_save
-    
-    if st.sidebar.button("Run Clustering"):
-        with st.spinner("Running clustering..."):
-            try:
-                run_clustering_and_save()
-                st.sidebar.success("✅ Clustering completed!")
-            except Exception as e:
-                st.sidebar.error(f"❌ Error in clustering: {e}")
-except ImportError:
-    st.sidebar.error("❌ Clustering function not available")
-
-try:
-    from scripts.prepare_enhanced_index import prepare_enhanced_indexes
-    
-    if st.sidebar.button("Build Enhanced Indexes"):
-        with st.spinner("Preparing indexes..."):
-            try:
-                prepare_enhanced_indexes()
-                st.sidebar.success("✅ Enhanced indexes prepared!")
-            except Exception as e:
-                st.sidebar.error(f"❌ Error preparing indexes: {e}")
-except ImportError:
-    st.sidebar.error("❌ Enhanced indexing function not available")
 
 # ===========================
 # --- UMAP + Geographic Maps
@@ -1772,34 +1567,19 @@ if st.button("Ask Question") and question.strip():
 
             # Get response format enum from UI selection
             response_format_enum = get_response_format_enum(response_format)
-            
-            # Use selected pipeline with enhanced prompting
-            if "Ultra-Fast" in pipeline_choice:
-                st.info("🚀 **Using Enhanced Ultra-Fast RAG Pipeline with Structured Output**")
-                # Load embedding model for ultra-fast pipeline
-                embedding_model = load_embedding_model()
-                
-                answer, passages, token_count = enhanced_ultra_fast_answer_question(
-                    question=question,
-                    cluster_id=cluster_id,
-                    model=embedding_model,
-                    model_name=model_name,
-                    response_format_enum=response_format_enum,
-                    max_tokens=max_tokens,
-                    top_k=top_k,
-                    year_range=year_range
-                )
-            else:
-                st.info("🧠 **Using Enhanced Standard RAG Pipeline with Structured Output**")
-                answer, passages, token_count = enhanced_answer_question(
-                    question,
-                    cluster_id,
-                    model_name,
-                    response_format_enum,
-                    top_k,
-                    max_tokens,
-                    year_range
-                )
+
+            st.info("🚀 **Using Enhanced Ultra-Fast RAG Pipeline with Structured Output**")
+            embedding_model = load_embedding_model()
+            answer, passages, token_count = enhanced_ultra_fast_answer_question(
+                question=question,
+                cluster_id=cluster_id,
+                model=embedding_model,
+                model_name=model_name,
+                response_format_enum=response_format_enum,
+                max_tokens=max_tokens,
+                top_k=top_k,
+                year_range=year_range
+            )
 
             st.markdown("### 💬 Enhanced Structured Answer")
             st.markdown(f"**Format:** {response_format}")
@@ -1958,18 +1738,6 @@ with col_right:
 
         st.subheader("📐 Triadic Balance Correlations (Dekker et al., 2024)")
         st.dataframe(corr_df.style.format(precision=3))
-
-def conditional_debug_info(message: str, debug_type: str = "general"):
-    """Utility function to conditionally show debug messages for backwards compatibility."""
-    debug_info(message, debug_type=debug_type)
-
-def conditional_debug_success(message: str, debug_type: str = "general"):
-    """Utility function to conditionally show debug success messages."""
-    debug_success(message, debug_type=debug_type)
-
-def conditional_debug_warning(message: str, debug_type: str = "general"):
-    """Utility function to conditionally show debug warning messages."""
-    debug_warning(message, debug_type=debug_type)
 
 def main():
     """Main Streamlit application."""

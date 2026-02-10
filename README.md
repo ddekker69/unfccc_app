@@ -50,6 +50,37 @@ Then launch the app:
 streamlit run cluster_qa_app.py
 ```
 
+Recommended direct app entrypoint:
+
+```bash
+streamlit run apps/streamlit/cluster_qa_app.py
+```
+
+## Current App Behavior
+
+- The app uses the **Ultra-Fast RAG** flow as the primary path.
+- The sidebar no longer exposes legacy debug controls and legacy inline pipeline-management actions.
+- Azure upload/download warnings are expected in local mode when Azure credentials are not configured.
+
+### Model Menu (Local + API)
+
+The UI currently exposes:
+
+- `DeepSeek-R1-Distill-Qwen-14B (Recommended)`
+- `DeepSeek-R1-Distill-Qwen-7B (Faster)`
+- `DeepSeek-R1-Distill-Llama-8B (Alternative)`
+- `Qwen3-4B-Instruct (Fast Recommended)`
+- `Phi-4-mini-instruct (Efficient)`
+- `Qwen2.5-3B-Instruct (Light)`
+- `SmolLM2-1.7B-Instruct (Ultra Light)`
+- `TinyLlama-1B (8GB RAM)`
+- `gpt-4o`
+
+Notes:
+
+- First use of a model downloads weights from Hugging Face and can be large (especially 7B/14B models).
+- Legacy small-model fallbacks may still exist internally for resilience, even if not shown in the main menu.
+
 ## One-Command Pipeline
 
 For end-to-end processing (including optional app launch):

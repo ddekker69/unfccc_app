@@ -72,35 +72,34 @@ except Exception as e:
     client = None
     print(f"⚠️ OpenAI client initialization failed: {e} - using local models only")
 
-# === Azure model download for Streamlit Cloud ===
-if IS_STREAMLIT_CLOUD:
-    if not os.path.exists(LOCAL_MODEL_PATH):
-        print("📦 Model not found locally. Downloading from Azure...")
-        success = download_and_extract_model_from_azure(
-            container_name=AZURE_CONTAINER_NAME,
-            blob_name=AZURE_MODEL_BLOB_NAME,
-            extract_to="models/"
-        )
-        if not success:
-            print("❌ Failed to download from Azure, using Hugging Face model")
-            model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-        else:
+@st.cache_resource(show_spinner="Loading embedding model...")
+def get_embedding_model():
+    """
+    Load SentenceTransformer lazily.
+    This avoids blocking app startup with model download/loading on import.
+    """
+    if IS_STREAMLIT_CLOUD:
+        if not os.path.exists(LOCAL_MODEL_PATH):
+            print("📦 Model not found locally. Downloading from Azure...")
+            success = download_and_extract_model_from_azure(
+                container_name=AZURE_CONTAINER_NAME,
+                blob_name=AZURE_MODEL_BLOB_NAME,
+                extract_to="models/",
+            )
+            if not success:
+                print("❌ Failed to download from Azure, using Hugging Face model")
+                return SentenceTransformer(EMBEDDING_MODEL_NAME)
             print(f"✅ Model loaded from Azure: {LOCAL_MODEL_PATH}")
-            model = SentenceTransformer(str(LOCAL_MODEL_PATH))
-    else:
+            return SentenceTransformer(str(LOCAL_MODEL_PATH))
         print(f"✅ Model already exists at {LOCAL_MODEL_PATH}")
-        model = SentenceTransformer(str(LOCAL_MODEL_PATH))
-else:
-    # For local development, check if local model exists, otherwise use Hugging Face
+        return SentenceTransformer(str(LOCAL_MODEL_PATH))
+
+    # Local development: prefer cached local model path, fallback to HF model name.
     if os.path.exists(LOCAL_MODEL_PATH):
         print(f"✅ Using local model: {LOCAL_MODEL_PATH}")
-        model = SentenceTransformer(str(LOCAL_MODEL_PATH))
-    else:
-        print(f"⚠️ Local model not found at {LOCAL_MODEL_PATH}, downloading from Hugging Face")
-        model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-
-# === Load SentenceTransformer Model ===
-# model = SentenceTransformer(str(LOCAL_MODEL_PATH))
+        return SentenceTransformer(str(LOCAL_MODEL_PATH))
+    print(f"⚠️ Local model not found at {LOCAL_MODEL_PATH}, downloading from Hugging Face")
+    return SentenceTransformer(EMBEDDING_MODEL_NAME)
 
 # # === OpenAI client ===
 # client = openai.OpenAI(api_key=OPENAI_API_KEY)
@@ -152,7 +151,8 @@ def load_global_index():
 # --- Retrieve top-k matching documents ---
 @st.cache_resource(show_spinner="Loading index...")
 def retrieve(query, _index, data, top_k=5, year_range=None):
-    query_vec = model.encode([query])
+    embedding_model = get_embedding_model()
+    query_vec = embedding_model.encode([query])
     
     # If year filtering is enabled and publication years are available
     if year_range and 'publication_years' in data:
@@ -250,27 +250,26 @@ def generate_answer(question, context, model_name=None):
 # Initialize global model cache - ENHANCED: Support multiple models
 _local_qa_models = {}  # Dictionary to cache multiple models
 _default_model_name = None
+MODEL_NAME_MAPPING = {
+    "DeepSeek-R1-Distill-Qwen-14B (Recommended)": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+    "DeepSeek-R1-Distill-Qwen-7B (Faster)": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+    "DeepSeek-R1-Distill-Llama-8B (Alternative)": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+    "Qwen3-4B-Instruct (Fast Recommended)": "Qwen/Qwen3-4B-Instruct-2507",
+    "Phi-4-mini-instruct (Efficient)": "microsoft/Phi-4-mini-instruct",
+    "Qwen2.5-3B-Instruct (Light)": "Qwen/Qwen2.5-3B-Instruct",
+    "SmolLM2-1.7B-Instruct (Ultra Light)": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+    "TinyLlama-1B (8GB RAM)": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "gpt-4o": "gpt-4o",
+}
 
-@st.cache_resource(show_spinner="Loading DeepSeek model (one-time setup)...")
+@st.cache_resource(show_spinner="Loading local model (one-time setup)...")
 def get_cached_local_model(preferred_model_name=None):
     """Load and cache the local model, with support for specific model selection."""
     global _local_qa_models, _default_model_name
     
-    # Map display names to actual model names
-    model_name_mapping = {
-        "DeepSeek-R1-Distill-Qwen-14B (Recommended)": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
-        "DeepSeek-R1-Distill-Qwen-7B (Faster)": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-        "DeepSeek-R1-Distill-Llama-8B (Alternative)": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
-        "DeepSeek-LLM-7B-Chat (Fallback)": "deepseek-ai/deepseek-llm-7b-chat",
-        "TinyLlama-1B (8GB RAM)": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-        "DistilGPT2 (Low Memory)": "distilgpt2",
-        "FLAN-T5-Small (Ultra Light)": "google/flan-t5-small",
-        "gpt-4o": "gpt-4o"  # OpenAI models pass through
-    }
-    
     # Convert display name to actual model name if needed
-    if preferred_model_name and preferred_model_name in model_name_mapping:
-        actual_model_name = model_name_mapping[preferred_model_name]
+    if preferred_model_name and preferred_model_name in MODEL_NAME_MAPPING:
+        actual_model_name = MODEL_NAME_MAPPING[preferred_model_name]
         st.info(f"🎯 **DEBUG**: Requested specific model: {preferred_model_name} -> {actual_model_name}")
     else:
         actual_model_name = preferred_model_name
@@ -315,26 +314,29 @@ def get_cached_local_model(preferred_model_name=None):
             "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",    # Best reasoning model
             "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",     # Faster reasoning model  
             "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",    # Alternative reasoning model
-            "deepseek-ai/deepseek-llm-7b-chat",            # Fallback chat model
-            "TinyLlama/TinyLlama-1.1B-Chat-v1.0",          # Emergency fallback
+            "Qwen/Qwen3-4B-Instruct-2507",                 # Strong quality/speed tradeoff
+            "microsoft/Phi-4-mini-instruct",               # Efficient modern small model
+            "Qwen/Qwen2.5-3B-Instruct",                    # Lightweight fallback
         ]
         st.info(f"🚀 **DEBUG**: High RAM system - using premium models")
     elif total_ram_gb >= 14:
         # Medium systems (14-28GB)
         model_options = [
             "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",     # Best option for medium RAM
-            "deepseek-ai/deepseek-llm-7b-chat",            # Alternative
-            "TinyLlama/TinyLlama-1.1B-Chat-v1.0",          # Lighter fallback
-            "distilgpt2",                                   # Emergency fallback
+            "Qwen/Qwen3-4B-Instruct-2507",                 # Fast recommended
+            "microsoft/Phi-4-mini-instruct",               # Efficient
+            "Qwen/Qwen2.5-3B-Instruct",                    # Light fallback
+            "HuggingFaceTB/SmolLM2-1.7B-Instruct",         # Ultra light fallback
+            "TinyLlama/TinyLlama-1.1B-Chat-v1.0",          # Emergency fallback
         ]
-        st.info(f"⚡ **DEBUG**: Medium RAM system - using 7B models")
+        st.info(f"⚡ **DEBUG**: Medium RAM system - using balanced local models")
     else:
         # Low RAM systems (< 14GB) - Use small models only
         model_options = [
+            "Qwen/Qwen2.5-3B-Instruct",                    # Best lightweight modern model
+            "HuggingFaceTB/SmolLM2-1.7B-Instruct",         # Very light
             "TinyLlama/TinyLlama-1.1B-Chat-v1.0",          # Best small model
-            "google/flan-t5-small",                         # Alternative small model
-            "distilgpt2",                                   # Lightweight option
-            "microsoft/DialoGPT-medium",                    # Final fallback
+            "distilgpt2",                                   # Legacy emergency fallback
         ]
         st.warning(f"💾 **DEBUG**: Low RAM system ({total_ram_gb:.1f}GB) - using lightweight models")
         st.info("💡 **TIP**: Consider using OpenAI API for better quality responses")
@@ -379,6 +381,32 @@ def get_cached_local_model(preferred_model_name=None):
                     pad_token_id=tokenizer.eos_token_id,
                     return_full_text=False      # Only return new text
                 )
+            elif any(keyword in model_name.lower() for keyword in ["qwen", "phi-4-mini", "smollm2"]):
+                # Modern lightweight instruct models
+                tokenizer = AutoTokenizer.from_pretrained(model_name)
+                if tokenizer.pad_token is None:
+                    tokenizer.pad_token = tokenizer.eos_token
+
+                preferred_dtype = torch.float16 if (torch.cuda.is_available() or torch.backends.mps.is_available()) else torch.float32
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    torch_dtype=preferred_dtype,
+                    device_map="auto" if (torch.cuda.is_available() or torch.backends.mps.is_available()) else "cpu",
+                    trust_remote_code=True,
+                    low_cpu_mem_usage=True,
+                )
+
+                qa_model = pipeline(
+                    "text-generation",
+                    model=model,
+                    tokenizer=tokenizer,
+                    max_length=3072,
+                    do_sample=True,
+                    temperature=0.7,
+                    top_p=0.9,
+                    pad_token_id=tokenizer.eos_token_id,
+                    return_full_text=False,
+                )
             elif "tinyllama" in model_name.lower():
                 # Optimized settings for TinyLlama (good for 8GB RAM)
                 st.info(f"🐣 **DEBUG**: Loading TinyLlama with 8GB RAM optimizations")
@@ -406,17 +434,6 @@ def get_cached_local_model(preferred_model_name=None):
                     top_p=0.9,
                     pad_token_id=tokenizer.eos_token_id,
                     return_full_text=False
-                )
-            elif "flan-t5" in model_name.lower():
-                # T5 models use text-to-text generation
-                st.info(f"🔤 **DEBUG**: Loading FLAN-T5 with text2text generation")
-                qa_model = pipeline(
-                    "text2text-generation",
-                    model=model_name,
-                    max_length=512,             # T5 models are more efficient
-                    do_sample=True,
-                    temperature=0.7,
-                    device=0 if torch.cuda.is_available() else -1  # Use GPU if available
                 )
             elif "distilgpt2" in model_name.lower() or "dialogpt" in model_name.lower():
                 # Very lightweight models for emergency fallback
@@ -476,15 +493,7 @@ def generate_answer_local(question, context, model_name=None):
         
         # Show which model is actually being used vs requested
         if model_name and model_name != actual_model_name:
-            # Check if it's a display name that was mapped
-            model_name_mapping = {
-                "DeepSeek-R1-Distill-Qwen-14B (Recommended)": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
-                "DeepSeek-R1-Distill-Qwen-7B (Faster)": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-                "DeepSeek-R1-Distill-Llama-8B (Alternative)": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
-                "DeepSeek-LLM-7B-Chat (Fallback)": "deepseek-ai/deepseek-llm-7b-chat",
-            }
-            
-            mapped_name = model_name_mapping.get(model_name, model_name)
+            mapped_name = MODEL_NAME_MAPPING.get(model_name, model_name)
             if mapped_name == actual_model_name:
                 st.success(f"✅ **DEBUG**: Using requested model: {model_name}")
             else:
@@ -605,8 +614,11 @@ Please provide a comprehensive analysis that synthesizes information from multip
                 'repetition_penalty': 1.15  # Prevent repetition in longer responses
             })
             st.info(f"🐣 **DEBUG**: Using TinyLlama-optimized generation (max_tokens={generation_params['max_new_tokens']})")
-        elif "distilgpt2" in actual_model_name.lower() or "flan-t5" in actual_model_name.lower():
-            # Lightweight models need moderate token limits
+        elif any(
+            keyword in actual_model_name.lower()
+            for keyword in ["qwen", "phi-4-mini", "smollm2", "distilgpt2"]
+        ):
+            # Lightweight instruct models
             generation_params.update({
                 'max_new_tokens': 600,   # INCREASED: More tokens for complete responses
                 'temperature': 0.7,
@@ -796,7 +808,8 @@ def generate_answer_simple_fallback(question, context):
 
 # --- Cross-cluster QA ---
 def answer_cross_cluster_question(question, passages, model_name):
-    context = token_aware_compressor(passages, question, model, max_tokens=MAX_CONTEXT_TOKENS)
+    embedding_model = get_embedding_model()
+    context = token_aware_compressor(passages, question, embedding_model, max_tokens=MAX_CONTEXT_TOKENS)
     if not context.strip():
         return "No sufficient information found.", 0
     answer = generate_answer(question, context, model_name)
@@ -854,7 +867,8 @@ def answer_question(question, cluster_id, model_name=None, top_k=5, max_tokens=M
     # Use fast compression that ranks passages by semantic similarity to the question
     st.info(f"🔧 **DEBUG**: Compressing context...")
     compression_start = time.time()
-    context = fast_context_compressor(passages, question, model, max_tokens=max_tokens)
+    embedding_model = get_embedding_model()
+    context = fast_context_compressor(passages, question, embedding_model, max_tokens=max_tokens)
     compression_time = time.time() - compression_start
     
     # Minimal debug info
@@ -982,10 +996,16 @@ def get_model_time_estimate(model_name, is_ultra_fast=False):
         # Ultra-fast estimates (enhanced preprocessing makes things faster)
         if "tinyllama" in model_lower:
             return "5-15 seconds"
+        elif "smollm2" in model_lower:
+            return "5-15 seconds"
+        elif "phi-4-mini" in model_lower:
+            return "8-20 seconds"
+        elif "qwen3-4b" in model_lower:
+            return "8-22 seconds"
+        elif "qwen2.5-3b" in model_lower:
+            return "7-20 seconds"
         elif "distilgpt2" in model_lower:
             return "3-10 seconds"
-        elif "flan-t5" in model_lower:
-            return "5-18 seconds"
         elif any(keyword in model_lower for keyword in ["deepseek-r1-distill-qwen-7b", "7b"]):
             return "10-30 seconds"
         elif any(keyword in model_lower for keyword in ["deepseek-r1-distill-qwen-14b", "14b"]):
@@ -998,10 +1018,16 @@ def get_model_time_estimate(model_name, is_ultra_fast=False):
         # Standard pipeline estimates
         if "tinyllama" in model_lower:
             return "10-20 seconds"
+        elif "smollm2" in model_lower:
+            return "10-22 seconds"
+        elif "phi-4-mini" in model_lower:
+            return "12-28 seconds"
+        elif "qwen3-4b" in model_lower:
+            return "12-30 seconds"
+        elif "qwen2.5-3b" in model_lower:
+            return "10-26 seconds"
         elif "distilgpt2" in model_lower:
             return "5-15 seconds"
-        elif "flan-t5" in model_lower:
-            return "8-25 seconds"
         elif any(keyword in model_lower for keyword in ["deepseek-r1-distill-qwen-7b", "7b"]):
             return "20-45 seconds"
         elif any(keyword in model_lower for keyword in ["deepseek-r1-distill-qwen-14b", "14b"]):
