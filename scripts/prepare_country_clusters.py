@@ -11,8 +11,6 @@ Now includes 172 countries (up from original 56).
 
 import pandas as pd
 import pickle
-import os
-import urllib.parse
 import logging
 import umap.umap_ as umap
 import hdbscan
@@ -176,54 +174,3 @@ def run_country_clustering():
 
 if __name__ == "__main__":
     result = run_country_clustering()
-
-# # prepare_country_clusters.py
-#
-# import pandas as pd
-# import pickle
-# import os
-# import umap.umap_ as umap
-# import hdbscan
-# from sentence_transformers import SentenceTransformer
-#
-# # --- Config ---
-# INPUT_PATH = "data/extracted_texts.pkl"
-# OUTPUT_PATH = "data/country_plot_df.pkl"
-# EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
-# MIN_CLUSTER_SIZE = 2
-#
-# # --- Load Data ---
-# with open(INPUT_PATH, "rb") as f:
-#     df = pickle.load(f)
-#
-# # --- Filter Valid Documents ---
-# df = df.dropna(subset=['country', 'text'])
-# df = df[df['status'] == 'ok']
-#
-# # --- Group by Country ---
-# grouped = df.groupby("country")["text"].apply(lambda x: " ".join(x.dropna())).reset_index()
-# grouped = grouped[grouped["text"].str.strip().astype(bool)]
-#
-# # --- Compute Embeddings ---
-# model = SentenceTransformer(EMBEDDING_MODEL)
-# embeddings = model.encode(grouped["text"].tolist(), show_progress_bar=True)
-#
-# # --- UMAP Reduction ---
-# reducer = umap.UMAP(n_neighbors=5, min_dist=0.2, metric='cosine', random_state=42)
-# reduced_embeddings = reducer.fit_transform(embeddings)
-#
-# # --- HDBSCAN Clustering ---
-# clusterer = hdbscan.HDBSCAN(min_cluster_size=MIN_CLUSTER_SIZE)
-# clusters = clusterer.fit_predict(reduced_embeddings)
-#
-# # --- Prepare Final DataFrame ---
-# grouped["x"] = reduced_embeddings[:, 0]
-# grouped["y"] = reduced_embeddings[:, 1]
-# grouped["country_cluster"] = clusters
-# grouped = grouped.rename(columns={"text": "combined_text"})
-#
-# # --- Save Output ---
-# with open(OUTPUT_PATH, "wb") as f:
-#     pickle.dump(grouped, f)
-#
-# print(f"✅ Country-level clustering saved to {OUTPUT_PATH}")

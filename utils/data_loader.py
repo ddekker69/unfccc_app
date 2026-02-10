@@ -95,8 +95,8 @@ def load_dataset(path: str, clustering_mode: str) -> pd.DataFrame:
             st.error("❌ Failed to prepare data. Please run data preparation scripts manually.")
             st.info("""
             **To prepare the data:**
-            1. Run `python extract_texts.py` to extract text from documents
-            2. Run `python prepare_plot_df.py` to create clustering data
+            1. Run `python scripts/extract_texts.py` to extract text from documents
+            2. Run `python scripts/prepare_plot_df.py` to create clustering data
             3. Or check Azure Blob Storage configuration
             """)
             st.stop()
@@ -126,7 +126,7 @@ def prepare_missing_data(path: str, clustering_mode: str) -> bool:
         if not os.path.exists(extracted_texts_path):
             st.info("🔄 Running text extraction...")
             result = subprocess.run(
-                [sys.executable, "extract_texts.py"],
+                [sys.executable, "scripts/extract_texts.py"],
                 capture_output=True,
                 text=True,
                 cwd=".",
@@ -139,7 +139,7 @@ def prepare_missing_data(path: str, clustering_mode: str) -> bool:
         # Run the plot data preparation
         st.info("🔄 Running plot data preparation...")
         result = subprocess.run(
-            [sys.executable, "prepare_plot_df.py"],
+            [sys.executable, "scripts/prepare_plot_df.py"],
             capture_output=True,
             text=True,
             cwd=".",

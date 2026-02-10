@@ -213,10 +213,10 @@ def main():
         print("   You can now run: streamlit run cluster_qa_app.py")
     elif passed >= 3:
         print("\n⚠️  Setup is mostly working, but some issues detected.")
-        print("   Check the failed tests above and review SECURITY_SETUP.md")
+        print("   Check the failed tests above and review README.md setup steps")
     else:
         print("\n❌ Setup issues detected. Please review the following:")
-        print("   1. Check SECURITY_SETUP.md for detailed instructions")
+        print("   1. Check README.md for detailed setup instructions")
         print("   2. Ensure you have the correct API keys")
         print("   3. Verify .streamlit/secrets.toml contains your real keys")
     

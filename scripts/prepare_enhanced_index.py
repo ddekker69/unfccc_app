@@ -4,17 +4,18 @@
 import pandas as pd
 import faiss
 import pickle
-from sentence_transformers import SentenceTransformer
 import os
 import gc
 import numpy as np
 import torch
-from pathlib import Path
 from config import EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE
 from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
 import glob
 from core.pipeline.embedding_store import EmbeddingStore
-import streamlit as st
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover - streamlit is optional for CLI use
+    st = None
 
 def chunk_text_intelligently(text, chunk_size=500, overlap=50):
     """Split text into overlapping chunks with sentence boundaries."""
@@ -245,157 +246,25 @@ def build_filename_mapping(plot_df):
     print(f"📋 Filename mapping complete: {len(filename_mapping)} files mapped")
     return filename_mapping
 
-# def prepare_enhanced_indexes():
-#     """Create enhanced indexes with pre-computed embeddings and metadata."""
-#
-#     check_folders()
-#     check_dependencies()
-#     store = EmbeddingStore(EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE)
-#     print(f"🤖 Loading embedding model: {EMBEDDING_MODEL_NAME} on {OPTIMAL_DEVICE}")
-#     model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=OPTIMAL_DEVICE)
-#     print(f"✅ Model loaded with {model.get_sentence_embedding_dimension()}D embeddings")
-#
-#     # Load data
-#     plot_df = pd.read_pickle("data/plot_df.pkl")
-#     print(f"📊 Processing {len(plot_df)} documents across {plot_df['cluster'].nunique()} clusters")
-#
-#     # Build filename mapping by scanning source folders
-#     filename_mapping = build_filename_mapping(plot_df)
-#
-#     # Create enhanced directories
-#     os.makedirs("indexes_enhanced", exist_ok=True)
-#     os.makedirs("embeddings_enhanced", exist_ok=True)
-#     os.makedirs("summaries", exist_ok=True)
-#
-#     # Process each cluster
-#     for cluster in sorted(plot_df['cluster'].unique()):
-#         print(f"\n🔧 Processing cluster {cluster}...")
-#
-#         cluster_df = plot_df[plot_df['cluster'] == cluster]
-#
-#         if len(cluster_df) == 0:
-#             print(f"   ⚠️ Skipping empty cluster {cluster}")
-#             continue
-#
-#         # Prepare enhanced data structures
-#         all_chunks = []
-#         all_embeddings = []
-#         chunk_metadata = []
-#         doc_summaries = {}
-#
-#         print(f"   📄 Processing {len(cluster_df)} documents...")
-#
-#         # ---- inside the “for cluster …” loop ----
-#         for _, row in cluster_df.iterrows():
-#             doc_id = row['document_id']
-#             text = str(row['text'])
-#             title = row.get('title', 'Unknown Document')
-#             country = row.get('country', 'Unknown')
-#             folder = row.get('folder', 'unknown_folder')
-#
-#             # filename from earlier mapping
-#             actual_filename = filename_mapping.get(doc_id)
-#
-#             # screen output + smarter title
-#             print(f"      📄 Processing {doc_id} ({title})…")
-#             extracted_title = extract_document_title_from_content(text, title)
-#             display_title = extracted_title if extracted_title != title and len(extracted_title) > len(title) else title
-#             if extracted_title != title:
-#                 print(f"         📝 Extracted title: '{extracted_title}'")
-#
-#             # one‑paragraph summary
-#             # ─── summaries: load from cache ─────────────────────────────
-#             summary = store.summary(doc_id)  # ✨ 1‑liner, no recompute
-#             summary_vector = store.summary_vec(doc_id)  # for the FAISS overview index
-#             doc_summaries[doc_id] = {
-#                 'summary': summary,
-#                 'title': title,
-#                 'extracted_title': extracted_title,
-#                 'display_title': display_title,
-#                 'country': country,
-#                 'folder': folder,
-#                 'filename': actual_filename,
-#                 'full_length': len(text)
-#             }
-#
-#             # -------- cached chunks + embeddings --------
-#             chunks = store.chunks(doc_id)  # list[str]
-#             chunk_vectors = store.chunk_vecs(doc_id)  # np.ndarray, shape (n_chunks, dim)
-#
-#             for idx_c, (chunk, vec) in enumerate(zip(chunks, chunk_vectors)):
-#                 all_chunks.append(chunk)
-#                 all_embeddings.append(vec)  # <- 1‑D array per chunk
-#                 chunk_metadata.append({
-#                     'doc_id': doc_id,
-#                     'chunk_id': f"{doc_id}_chunk_{idx_c}",
-#                     'title': title,
-#                     'extracted_title': extracted_title,
-#                     'display_title': display_title,
-#                     'country': country,
-#                     'folder': folder,
-#                     'filename': actual_filename,
-#                     'chunk_index': idx_c,
-#                     'total_chunks': len(chunks),
-#                     'summary': summary
-#                 })
-#
-#         print(f"   🧩 Created {len(all_chunks)} chunks from {len(cluster_df)} documents")
-#
-#         # -------- assemble embeddings (no re‑encoding!) --------
-#         chunk_embeddings = np.vstack(all_embeddings).astype(np.float32)
-#
-#         # Also generate embeddings for summaries (for quick overview queries)
-#         summaries_list = [doc_summaries[doc_id]['summary'] for doc_id in doc_summaries.keys()]
-#         print(f"   📝 Generating embeddings for {len(summaries_list)} summaries...")
-#         # ----- after collecting all per‑doc data -----
-#         summary_embeddings = np.vstack([store.summary_vec(d) for d in doc_summaries]).astype(np.float32)
-#
-#         # Create separate FAISS indexes
-#
-#         # 1. Chunk index (detailed search)
-#         chunk_index = faiss.IndexFlatL2(chunk_embeddings.shape[1])
-#         chunk_index.add(chunk_embeddings.astype(np.float32))
-#
-#         # 2. Summary index (quick overview)
-#         summary_index = faiss.IndexFlatL2(summary_embeddings.shape[1])
-#         summary_index.add(summary_embeddings.astype(np.float32))
-#
-#         # Save enhanced data
-#         cluster_data = {
-#             'chunks': all_chunks,
-#             'chunk_metadata': chunk_metadata,
-#             'chunk_embeddings': chunk_embeddings,
-#             'doc_summaries': doc_summaries,
-#             'summary_embeddings': summary_embeddings,
-#             '': list(doc_summaries.keys())
-#         }
-#
-#         # Save files
-#         faiss.write_index(chunk_index, f"indexes_enhanced/cluster_{cluster}_chunks.index")
-#         faiss.write_index(summary_index, f"indexes_enhanced/cluster_{cluster}_summaries.index")
-#
-#         with open(f"embeddings_enhanced/cluster_{cluster}.pkl", "wb") as f:
-#             pickle.dump(cluster_data, f)
-#
-#         print(f"   ✅ Saved enhanced indexes and embeddings")
-#         print(f"      - Chunk index: {len(all_chunks)} items")
-#         print(f"      - Summary index: {len(doc_summaries)} items")
-#
-#         # Clear memory
-#         del chunk_embeddings, summary_embeddings, chunk_index, summary_index
-#         gc.collect()
-#
-#         if torch.cuda.is_available():
-#             torch.cuda.empty_cache()
-#
-#     print("\n🎉 Enhanced index preparation complete!")
-#     print("\nNow you can use ultra-fast context generation with:")
-#     print("  - Pre-computed embeddings (no real-time encoding)")
-#     print("  - Intelligent text chunks (better context boundaries)")
-#     print("  - Document summaries (quick overview mode)")
-#     print("  - Rich metadata (titles, countries, chunk relationships)")
 def prepare_enhanced_indexes():
     """Create enhanced indexes with pre-computed embeddings and metadata."""
+    def info(message: str) -> None:
+        if st is not None:
+            st.write(message)
+        else:
+            print(message)
+
+    def warn(message: str) -> None:
+        if st is not None:
+            st.warning(message)
+        else:
+            print(message)
+
+    def success(message: str) -> None:
+        if st is not None:
+            st.success(message)
+        else:
+            print(message)
 
     # Check folders and dependencies
     check_folders()
@@ -403,15 +272,11 @@ def prepare_enhanced_indexes():
 
     # Initialize Embedding Store
     store = EmbeddingStore(EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE)
-    st.write(f"🤖 Loading embedding model: {EMBEDDING_MODEL_NAME} on {OPTIMAL_DEVICE}")
-
-    # Initialize the model
-    model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=OPTIMAL_DEVICE)
-    st.write(f"✅ Model loaded with {model.get_sentence_embedding_dimension()}D embeddings")
+    info(f"🤖 Loading embedding model: {EMBEDDING_MODEL_NAME} on {OPTIMAL_DEVICE}")
 
     # Load the plot_df data
     plot_df = pd.read_pickle("data/plot_df.pkl")
-    st.write(f"📊 Processing {len(plot_df)} documents across {plot_df['cluster'].nunique()} clusters")
+    info(f"📊 Processing {len(plot_df)} documents across {plot_df['cluster'].nunique()} clusters")
 
     # Build filename mapping
     filename_mapping = build_filename_mapping(plot_df)
@@ -423,12 +288,12 @@ def prepare_enhanced_indexes():
 
     # Process each cluster
     for cluster in sorted(plot_df['cluster'].unique()):
-        st.write(f"\n🔧 Processing cluster {cluster}...")
+        info(f"\n🔧 Processing cluster {cluster}...")
 
         cluster_df = plot_df[plot_df['cluster'] == cluster]
 
         if len(cluster_df) == 0:
-            st.warning(f"⚠️ Skipping empty cluster {cluster}")
+            warn(f"⚠️ Skipping empty cluster {cluster}")
             continue
 
         # Prepare enhanced data structures
@@ -437,7 +302,7 @@ def prepare_enhanced_indexes():
         chunk_metadata = []
         doc_summaries = {}
 
-        st.write(f"   📄 Processing {len(cluster_df)} documents...")
+        info(f"   📄 Processing {len(cluster_df)} documents...")
 
         # Process documents in the cluster
         for _, row in cluster_df.iterrows():
@@ -450,16 +315,11 @@ def prepare_enhanced_indexes():
             # Filename from earlier mapping
             actual_filename = filename_mapping.get(doc_id)
 
-            # Display information about the document
-            # st.write(f"      📄 Processing {doc_id} ({title})…")
             extracted_title = extract_document_title_from_content(text, title)
             display_title = extracted_title if extracted_title != title and len(extracted_title) > len(title) else title
-            # if extracted_title != title:
-            #     st.write(f"         📝 Extracted title: '{extracted_title}'")
 
             # One-paragraph summary (from cache)
             summary = store.summary(doc_id)  # 1-liner, no recompute
-            summary_vector = store.summary_vec(doc_id)  # For the FAISS overview index
             doc_summaries[doc_id] = {
                 'summary': summary,
                 'title': title,
@@ -492,14 +352,14 @@ def prepare_enhanced_indexes():
                     'summary': summary
                 })
 
-        st.write(f"   🧩 Created {len(all_chunks)} chunks from {len(cluster_df)} documents")
+        info(f"   🧩 Created {len(all_chunks)} chunks from {len(cluster_df)} documents")
 
         # Assemble embeddings (no re-encoding)
         chunk_embeddings = np.vstack(all_embeddings).astype(np.float32)
 
         # Generate embeddings for summaries
         summaries_list = [doc_summaries[doc_id]['summary'] for doc_id in doc_summaries.keys()]
-        st.write(f"   📝 Generating embeddings for {len(summaries_list)} summaries...")
+        info(f"   📝 Generating embeddings for {len(summaries_list)} summaries...")
 
         summary_embeddings = np.vstack([store.summary_vec(d) for d in doc_summaries]).astype(np.float32)
 
@@ -526,9 +386,9 @@ def prepare_enhanced_indexes():
         with open(f"embeddings_enhanced/cluster_{cluster}.pkl", "wb") as f:
             pickle.dump(cluster_data, f)
 
-        st.success(f"   ✅ Saved enhanced indexes and embeddings")
-        st.write(f"      - Chunk index: {len(all_chunks)} items")
-        st.write(f"      - Summary index: {len(doc_summaries)} items")
+        success("   ✅ Saved enhanced indexes and embeddings")
+        info(f"      - Chunk index: {len(all_chunks)} items")
+        info(f"      - Summary index: {len(doc_summaries)} items")
 
         # Clear memory
         del chunk_embeddings, summary_embeddings, chunk_index, summary_index
@@ -537,12 +397,12 @@ def prepare_enhanced_indexes():
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    st.write("\n🎉 Enhanced index preparation complete!")
-    st.write("\nNow you can use ultra-fast context generation with:")
-    st.write("  - Pre-computed embeddings (no real-time encoding)")
-    st.write("  - Intelligent text chunks (better context boundaries)")
-    st.write("  - Document summaries (quick overview mode)")
-    st.write("  - Rich metadata (titles, countries, chunk relationships)")
+    info("\n🎉 Enhanced index preparation complete!")
+    info("\nNow you can use ultra-fast context generation with:")
+    info("  - Pre-computed embeddings (no real-time encoding)")
+    info("  - Intelligent text chunks (better context boundaries)")
+    info("  - Document summaries (quick overview mode)")
+    info("  - Rich metadata (titles, countries, chunk relationships)")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
-# embedding_store.py
-import os, pickle, numpy as np
+import pickle
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
-# from prepare_enhanced_index import create_document_summary
 
 EMB_FILE = Path("embeddings_cache/doc_embeddings.pkl")      # doc_id → np.ndarray
 CHUNK_FILE = Path("embeddings_cache/doc_chunks.pkl")        # doc_id → list[str]
@@ -63,7 +61,7 @@ class EmbeddingStore:
         self.doc_summaries     = _maybe_load(SUMMARY_FILE, {})
         self.doc_summary_embs  = _maybe_load(SUMMARY_EMB_FILE, {})
     def _flush(self):
-        # ensure parent folder(s) exist
+        # Ensure cache directory exists and write each cache artifact once.
         for path, obj in [
             (EMB_FILE, self.doc_embs),
             (CHUNK_FILE, self.doc_chunks),
@@ -71,10 +69,5 @@ class EmbeddingStore:
             (SUMMARY_FILE, self.doc_summaries),
             (SUMMARY_EMB_FILE, self.doc_summary_embs),
         ]:
-            path.parent.mkdir(parents=True, exist_ok=True)  # <-- create folder if missing
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(pickle.dumps(obj))
-        EMB_FILE.write_bytes(pickle.dumps(self.doc_embs))
-        CHUNK_FILE.write_bytes(pickle.dumps(self.doc_chunks))
-        CHUNK_EMB_FILE.write_bytes(pickle.dumps(self.doc_chunk_embs))
-        SUMMARY_FILE.write_bytes(pickle.dumps(self.doc_summaries))
-        SUMMARY_EMB_FILE.write_bytes(pickle.dumps(self.doc_summary_embs))

@@ -602,7 +602,7 @@ def ultra_fast_answer_question(question, cluster_id, model, model_name=None, max
     else:
         # Fallback to regular RAG
         st.warning(f"⚠️ **DEBUG**: ENHANCED INDEXES NOT FOUND - Using standard RAG")
-        st.info("💡 **DEBUG**: Run `python prepare_enhanced_index.py` to enable ultra-fast mode")
+        st.info("💡 **DEBUG**: Run `python scripts/prepare_enhanced_index.py` to enable ultra-fast mode")
         
         fallback_start = time.time()
         from rag_engine import answer_question

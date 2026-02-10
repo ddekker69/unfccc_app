@@ -2,17 +2,15 @@
 
 ## Goal
 
-Decouple user-interface concerns (Streamlit) from runtime services (RAG/config), while preserving existing CLI and import entrypoints.
+Separate Streamlit/UI concerns from reusable runtime services and pipeline code while preserving legacy entrypoints.
 
-## New Module Boundaries
+## Active Module Boundaries
 
 ```text
 unfccc/
 ├── apps/streamlit/
 │   ├── cluster_qa_app.py
-│   ├── streamlit_headless_processor.py
-│   ├── working_headless_processor.py
-│   └── rag_headless_processor.py
+│   └── streamlit_headless_processor.py
 ├── core/config/
 │   └── settings.py
 ├── core/rag/
@@ -25,50 +23,24 @@ unfccc/
 │   └── pdf_file_management.py
 ├── scripts/
 │   ├── automated_pipeline.py
-│   ├── prepare_enhanced_index.py
+│   ├── build_embeddings.py
+│   ├── extract_texts.py
 │   ├── prepare_plot_df.py
-│   └── ... (other operational scripts)
-└── legacy wrapper modules at root (same original filenames)
+│   ├── prepare_index.py
+│   └── prepare_enhanced_index.py
+└── root wrappers (backward compatibility)
 ```
 
 ## Compatibility Strategy
 
-Each original top-level module now acts as a thin wrapper that re-exports from the new location.
+Root-level files (`cluster_qa_app.py`, `rag_engine.py`, `rag_pipeline.py`, `ultra_fast_rag.py`, `config.py`) remain thin wrappers so existing commands still work.
 
-Example:
+## Import Guidance
 
-- `unfccc/rag_engine.py` -> `from core.rag.rag_engine import *`
+Prefer these imports for new code:
 
-For script-style modules, wrappers also call `main()` under `if __name__ == "__main__":`.
-
-This keeps existing commands functional:
-
-- `streamlit run cluster_qa_app.py`
-
-## Configuration Hardening
-
-`core/config/settings.py` was updated to:
-
-- treat Streamlit as optional (no hard dependency for non-UI execution),
-- resolve project root paths correctly from the new location,
-- load `.env` from the repository module root instead of `core/config/`.
-
-## Validation
-
-Static syntax validation was run with:
-
-```bash
-python -m compileall unfccc/apps unfccc/core
-```
-
-## Migration Guidance
-
-New code should import from the new package paths:
-
-- App/UI: `apps.streamlit.*`
-- RAG services: `core.rag.*`
-- Pipeline helpers: `core.pipeline.*`
-- Operational scripts: `scripts.*`
-- Shared settings: `core.config.settings`
-
-Legacy top-level imports remain supported for backward compatibility, but should be treated as transitional.
+- UI: `apps.streamlit.*`
+- Runtime retrieval/generation: `core.rag.*`
+- Shared config: `core.config.settings`
+- Pipeline services: `core.pipeline.*`
+- Operational entrypoints: `scripts.*`

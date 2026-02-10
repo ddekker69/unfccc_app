@@ -1391,7 +1391,7 @@ if "Ultra-Fast" in pipeline_choice:
     if not os.path.exists("indexes_enhanced"):
         st.sidebar.warning("⚠️ Enhanced indexes not found")
         st.sidebar.markdown("**To enable full speed:**")
-        st.sidebar.code("python prepare_enhanced_index.py")
+        st.sidebar.code("python scripts/prepare_enhanced_index.py")
     else:
         # Check if any enhanced indexes exist
         enhanced_files = [f for f in os.listdir("indexes_enhanced") if f.endswith(".index")]
