@@ -2,11 +2,22 @@
 """Create document-level and country-level clustering dataframes."""
 
 import pickle
+import os
+import sys
+from pathlib import Path
+
+# Avoid numba cache failures when importing UMAP in constrained environments.
+os.environ.setdefault("NUMBA_CACHE_DIR", str(Path(".numba_cache").resolve()))
+Path(os.environ["NUMBA_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
 
 import hdbscan
 import numpy as np
 import pandas as pd
 import umap.umap_ as umap
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE, OUTPUT_PATH
 from core.pipeline.embedding_store import EmbeddingStore

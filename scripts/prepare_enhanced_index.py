@@ -8,6 +8,13 @@ import os
 import gc
 import numpy as np
 import torch
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from config import EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE
 from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
 import glob

@@ -13,6 +13,10 @@ import os
 import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 # Ensure stdout can display emoji on Windows CMD
 if sys.stdout.encoding is None or "UTF-8" not in sys.stdout.encoding.upper():
     try:

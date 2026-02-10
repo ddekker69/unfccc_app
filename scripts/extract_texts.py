@@ -18,10 +18,14 @@ import pickle
 import urllib.parse
 import re
 import logging
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from utils.country_detection import extract_country
 from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import PDF_DIR, CSV_PATH, OUTPUT_PATH
 import config
 

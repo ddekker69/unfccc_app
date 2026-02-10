@@ -12,11 +12,22 @@ Now includes 172 countries (up from original 56).
 import pandas as pd
 import pickle
 import logging
+import os
+import sys
+from pathlib import Path
+
+# Avoid numba cache failures when importing UMAP in constrained environments.
+os.environ.setdefault("NUMBA_CACHE_DIR", str(Path(".numba_cache").resolve()))
+Path(os.environ["NUMBA_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
+
 import umap.umap_ as umap
 import hdbscan
 from sentence_transformers import SentenceTransformer
 import numpy as np
-import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 # Ensure stdout can display emoji on Windows CMD
 if sys.stdout.encoding is None or "UTF-8" not in sys.stdout.encoding.upper():

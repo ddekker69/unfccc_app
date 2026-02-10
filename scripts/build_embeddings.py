@@ -4,6 +4,13 @@ Compute *all* document‑level and chunk‑level embeddings once and stash them 
 Rerunning is incremental: only unseen doc_ids are processed.
 """
 import pickle
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from core.pipeline.embedding_store import EmbeddingStore
 from config import EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE
 from core.pipeline.pipeline_bootstrap import check_folders, check_dependencies

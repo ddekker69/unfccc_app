@@ -4,11 +4,17 @@
 import gc
 import os
 import pickle
+import sys
+from pathlib import Path
 
 import faiss
 import numpy as np
 import pandas as pd
 from sentence_transformers import SentenceTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import AZURE_CONTAINER_NAME, EMBEDDING_MODEL_NAME, OPTIMAL_DEVICE
 from core.pipeline.pipeline_bootstrap import check_dependencies, check_folders

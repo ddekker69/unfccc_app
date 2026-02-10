@@ -32,6 +32,11 @@ import urllib.parse
 import re
 import logging
 from pathlib import Path
+
+# Avoid numba cache failures when importing UMAP in constrained environments.
+os.environ.setdefault("NUMBA_CACHE_DIR", str(Path(".numba_cache").resolve()))
+Path(os.environ["NUMBA_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
+
 import pandas as pd
 import pickle
 import fitz  # PyMuPDF
@@ -42,6 +47,11 @@ import faiss
 import gc
 import torch
 from sentence_transformers import SentenceTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from scripts.prepare_enhanced_index import chunk_text_intelligently
 from utils.country_detection import extract_country
 from utils.azure_blob_utils import upload_blob

@@ -5,9 +5,15 @@ import pandas as pd
 import faiss
 import numpy as np
 import pickle
-from sentence_transformers import SentenceTransformer
-from config import EMBEDDING_MODEL_NAME
 import sys
+from pathlib import Path
+from sentence_transformers import SentenceTransformer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from config import EMBEDDING_MODEL_NAME
 
 # Ensure stdout can display emoji on Windows CMD
 if sys.stdout.encoding is None or "UTF-8" not in sys.stdout.encoding.upper():
