@@ -113,8 +113,8 @@ def load_cluster_index(cluster_id):
 
     # Check if files exist
     if not os.path.exists(str(index_file)) or not os.path.exists(str(embeddings_file)):
-        st.warning(f"⚠️ Index files for cluster {cluster_id} not found. Q&A functionality limited.")
-        st.info("💡 To enable full Q&A: Run `python scripts/prepare_index.py` to build FAISS indexes")
+        st.warning(f"⚠️ Legacy standard index files for cluster {cluster_id} were not found.")
+        st.info("💡 This project now uses enhanced-only retrieval. Build enhanced indexes with `python scripts/automated_pipeline.py --skip-app`.")
         return None, None
 
     # Ensure that if the return value is a Path object, convert it to string for faiss and open()

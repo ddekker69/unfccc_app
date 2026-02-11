@@ -9,7 +9,6 @@ Usage:
 Options:
     --cluster-id CLUSTER_ID     Process questions for specific cluster (default: all)
     --model MODEL_NAME          Model to use (default: deepseek-ai/DeepSeek-R1-Distill-Qwen-14B)
-    --pipeline PIPELINE         Pipeline type: ultra_fast or standard (default: ultra_fast)
     --format FORMAT            Response format: detailed, bullet_points, summary, comparative, technical (default: detailed)
     --max-tokens TOKENS        Maximum tokens for response (default: 4000)
     --top-k K                  Number of top documents to retrieve (default: 5)
@@ -30,8 +29,13 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# Import the functions from cluster_qa_app without triggering Streamlit
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Import runtime modules from project root.
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parents[1]
+for path in (CURRENT_DIR, PROJECT_ROOT):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
 
 # Mock streamlit to avoid errors when importing cluster_qa_app functions
 class MockStreamlit:
@@ -58,7 +62,7 @@ sys.modules['streamlit'] = mock_st
 
 # Import the necessary functions
 from ultra_fast_rag import ultra_fast_answer_question
-from rag_engine import answer_question as standard_answer_question, get_cached_local_model
+from rag_engine import get_cached_local_model
 
 # Import the enhanced functions and prompt building from cluster_qa_app
 def build_simple_enhanced_prompt(question, context, response_format_enum, model_type="general"):
@@ -158,7 +162,12 @@ def enhanced_ultra_fast_answer_question(question, cluster_id, model, model_name,
     try:
         # Get the raw answer first
         answer, passages, token_count = ultra_fast_answer_question(
-            question, cluster_id, model, max_tokens, top_k
+            question,
+            cluster_id,
+            model,
+            model_name=model_name,
+            max_tokens=max_tokens,
+            top_k=top_k,
         )
         
         # If we got passages, enhance the answer with formatting
@@ -185,60 +194,19 @@ def enhanced_ultra_fast_answer_question(question, cluster_id, model, model_name,
         return f"Error in enhanced processing: {str(e)}", [], 0
 
 
-def enhanced_answer_question(question, cluster_id, model_name, response_format_enum, top_k=5, max_tokens=4000):
-    """Enhanced version of answer_question that accepts format instructions."""
-    try:
-        # Get the raw answer first
-        answer, passages, token_count = standard_answer_question(
-            question, cluster_id, model_name, max_tokens, top_k
-        )
-        
-        # If we got passages and model is available, enhance the answer
-        if passages:
-            try:
-                model, _ = get_cached_local_model(preferred_model_name=model_name)
-                if model:
-                    context = "\n\n".join([f"Document {i+1}: {passage}" for i, passage in enumerate(passages)])
-                    enhanced_prompt = build_simple_enhanced_prompt(question, context, response_format_enum, model_name)
-                    
-                    result = model(
-                        enhanced_prompt,
-                        max_new_tokens=max_tokens,
-                        do_sample=True,
-                        temperature=0.1,
-                        repetition_penalty=1.1,
-                        top_p=0.9
-                    )
-                    
-                    enhanced_answer = result[0]["generated_text"].strip() if isinstance(result, list) and "generated_text" in result[0] else str(result)
-                    return enhanced_answer, passages, token_count
-            except Exception as e:
-                print(f"Warning: Could not enhance answer: {e}")
-        
-        return answer, passages, token_count
-        
-    except Exception as e:
-        return f"Error in processing: {str(e)}", [], 0
-
-
-def process_question_with_rag(question, cluster_id, model_name, pipeline, response_format, max_tokens, top_k, model=None):
+def process_question_with_rag(question, cluster_id, model_name, response_format, max_tokens, top_k, model=None):
     """Process a single question using the RAG system."""
     start_time = time.time()
     
     try:
-        if pipeline == "ultra_fast":
+        if model is None:
+            model, _ = get_cached_local_model(preferred_model_name=model_name)
             if model is None:
-                model, _ = get_cached_local_model(preferred_model_name=model_name)
-                if model is None:
-                    raise Exception(f"Could not load model: {model_name}")
-            
-            answer, passages, token_count = enhanced_ultra_fast_answer_question(
-                question, cluster_id, model, model_name, response_format, max_tokens, top_k
-            )
-        else:  # standard pipeline
-            answer, passages, token_count = enhanced_answer_question(
-                question, cluster_id, model_name, response_format, top_k, max_tokens
-            )
+                raise Exception(f"Could not load model: {model_name}")
+        
+        answer, passages, token_count = enhanced_ultra_fast_answer_question(
+            question, cluster_id, model, model_name, response_format, max_tokens, top_k
+        )
         
         processing_time = time.time() - start_time
         return answer, passages, token_count, processing_time
@@ -294,10 +262,6 @@ Examples:
     
     # Cluster Selection
     parser.add_argument("--cluster-id", default="all", help="Cluster ID to process (default: all)")
-    
-    # RAG Pipeline Selection
-    parser.add_argument("--pipeline", choices=["ultra_fast", "standard"], default="ultra_fast", 
-                       help="Pipeline type: ultra_fast (5-20x faster) or standard (default: ultra_fast)")
     
     # Model Selection - matching Streamlit options exactly
     parser.add_argument("--model", 
@@ -381,7 +345,7 @@ Examples:
     print(f"   • Clustering mode: {args.clustering_mode}-level")
     print(f"   • Cluster ID: {args.cluster_id}")
     print(f"   • Model: {args.model} ({actual_model_name})")
-    print(f"   • Pipeline: {args.pipeline}")
+    print(f"   • Pipeline: ultra_fast (enhanced-only)")
     print(f"   • Format: {args.format}")
     print(f"   • Max tokens: {args.max_tokens}")
     print(f"   • Top-k: {args.top_k}")
@@ -397,19 +361,18 @@ Examples:
         print()
         show_openai_info()
     
-    # Load model once for ultra_fast pipeline
+    # Load model once
     model = None
-    if args.pipeline == "ultra_fast":
-        print(f"\n🤖 Loading model: {actual_model_name}...")
-        try:
-            model, loaded_model_name = get_cached_local_model(preferred_model_name=actual_model_name)
-            if model is None:
-                print(f"❌ Model not available: {actual_model_name}")
-                sys.exit(1)
-            print(f"✅ Model loaded: {loaded_model_name}")
-        except Exception as e:
-            print(f"❌ Error loading model: {e}")
+    print(f"\n🤖 Loading model: {actual_model_name}...")
+    try:
+        model, loaded_model_name = get_cached_local_model(preferred_model_name=actual_model_name)
+        if model is None:
+            print(f"❌ Model not available: {actual_model_name}")
             sys.exit(1)
+        print(f"✅ Model loaded: {loaded_model_name}")
+    except Exception as e:
+        print(f"❌ Error loading model: {e}")
+        sys.exit(1)
     
     # Process questions
     total_start_time = time.time()
@@ -424,7 +387,7 @@ Examples:
             f.write(f"• Clustering mode: {args.clustering_mode}-level\n")
             f.write(f"• Cluster ID: {args.cluster_id}\n")
             f.write(f"• Model: {args.model} ({actual_model_name})\n")
-            f.write(f"• Pipeline: {args.pipeline}\n")
+            f.write(f"• Pipeline: ultra_fast (enhanced-only)\n")
             f.write(f"• Response Format: {args.format}\n")
             f.write(f"• Max Tokens: {args.max_tokens}\n")
             f.write(f"• Top-K: {args.top_k}\n")
@@ -438,7 +401,7 @@ Examples:
                 
                 # Process the question
                 answer, passages, token_count, processing_time = process_question_with_rag(
-                    question, args.cluster_id, actual_model_name, args.pipeline, 
+                    question, args.cluster_id, actual_model_name,
                     args.format, args.max_tokens, args.top_k, model
                 )
                 total_processing_time += processing_time

@@ -1229,10 +1229,15 @@ def enhanced_ultra_fast_answer_question(question, cluster_id, model, model_name,
             return f"Error during context generation: {str(context_error)}. Try reducing top-k.", [], 0
             
     else:
-        # Fallback to standard enhanced answer
-        st.warning("Enhanced indexes not found, using standard RAG")
-        logger.info("Falling back to standard enhanced answer function")
-        return enhanced_answer_question(question, cluster_id, model_name, response_format_enum, top_k, max_tokens)
+        st.error("Enhanced indexes not found. This app now runs in enhanced-only mode.")
+        st.info("Run `python scripts/automated_pipeline.py --skip-app` to rebuild enhanced indexes.")
+        logger.error("Enhanced index missing; no standard fallback enabled")
+        return (
+            "Enhanced indexes are missing. Rebuild them with "
+            "`python scripts/automated_pipeline.py --skip-app` and retry.",
+            [],
+            0,
+        )
 
 # --- Model Preparation ---
 if IS_STREAMLIT_CLOUD:

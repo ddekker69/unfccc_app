@@ -600,17 +600,15 @@ def ultra_fast_answer_question(question, cluster_id, model, model_name=None, max
             st.error(f"❌ **DEBUG**: No context generated")
             return "No relevant information found.", [], 0
     else:
-        # Fallback to regular RAG
-        st.warning(f"⚠️ **DEBUG**: ENHANCED INDEXES NOT FOUND - Using standard RAG")
-        st.info("💡 **DEBUG**: Run `python scripts/prepare_enhanced_index.py` to enable ultra-fast mode")
-        
-        fallback_start = time.time()
-        from rag_engine import answer_question
-        result = answer_question(question, cluster_id, model_name, top_k=5, max_tokens=max_tokens)
-        fallback_time = time.time() - fallback_start
-        
-        st.info(f"🐌 **DEBUG**: Standard RAG completed in {fallback_time:.2f}s")
-        return result
+        # Enhanced-only mode: no legacy standard-RAG fallback.
+        st.error("❌ **DEBUG**: ENHANCED INDEXES NOT FOUND")
+        st.info("💡 **DEBUG**: Run `python scripts/automated_pipeline.py --skip-app` or `python scripts/prepare_enhanced_index.py`")
+        return (
+            "Enhanced indexes are required and were not found. Build them with "
+            "`python scripts/automated_pipeline.py --skip-app` and try again.",
+            [],
+            0,
+        )
 
 def generate_answer_ultra_fast_deepseek(question, context, model_name):
     """

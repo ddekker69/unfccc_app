@@ -47,7 +47,6 @@ Run in this order:
 python scripts/extract_texts.py
 python scripts/build_embeddings.py
 python scripts/prepare_plot_df.py
-python scripts/prepare_index.py
 python scripts/prepare_enhanced_index.py
 ```
 
@@ -101,7 +100,6 @@ Useful flags:
 ```bash
 python scripts/automated_pipeline.py --offline
 python scripts/automated_pipeline.py --skip-app
-python scripts/automated_pipeline.py --enhanced-only
 python scripts/automated_pipeline.py --force
 ```
 
@@ -109,4 +107,4 @@ python scripts/automated_pipeline.py --force
 
 - `scripts/prepare_enhanced_index.py` builds ultra-fast retrieval artifacts used by enhanced RAG mode.
 - Root-level modules (`cluster_qa_app.py`, `rag_engine.py`, etc.) are compatibility wrappers; new code should import from `apps.*`, `core.*`, and `scripts.*`.
-- Generated artifacts are expected under `data/`, `indexes/`, `embeddings/`, `indexes_enhanced/`, and `embeddings_enhanced/`.
+- Generated artifacts are expected under `data/`, `indexes_enhanced/`, and `embeddings_enhanced/`.

@@ -23,10 +23,8 @@ unfccc/
 │   └── pdf_file_management.py
 ├── scripts/
 │   ├── automated_pipeline.py
-│   ├── build_embeddings.py
 │   ├── extract_texts.py
 │   ├── prepare_plot_df.py
-│   ├── prepare_index.py
 │   └── prepare_enhanced_index.py
 └── root wrappers (backward compatibility)
 ```

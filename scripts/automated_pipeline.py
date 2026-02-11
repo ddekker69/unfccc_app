@@ -15,10 +15,8 @@ Usage:
 Arguments:
     --skip-extraction: Skip text extraction step (if already done)
     --skip-clustering: Skip clustering step (if already done)
-    --skip-indexing: Skip FAISS indexing step (if already done)
-    --skip-enhanced: Skip enhanced indexing for ultra-fast RAG
+    --skip-indexing: Skip enhanced FAISS indexing step (if already done)
     --skip-app: Skip launching the Streamlit app
-    --enhanced-only: Build only enhanced indexes (skip standard indexes)
     --force: Force reprocessing even if output files exist
     --offline: Run in offline mode (skip all Azure uploads)
 """
@@ -428,8 +426,6 @@ OUTPUT_FILES = {
     'extraction': 'data/extracted_texts.pkl',
     'clustering': 'data/plot_df.pkl',
     'country_clustering': 'data/country_plot_df.pkl',
-    'indexes': 'indexes/',
-    'embeddings': 'embeddings/'
 }
 
 def print_header(title):
@@ -749,92 +745,9 @@ def prepare_clustering(force=False):
     else:
         print("🔌 Offline mode: Skipping Azure upload")
 
-def build_indexes(force=False):
-    """Build FAISS indexes for each cluster."""
-    print_step(3, 4, "Building FAISS Search Indexes")
-    
-    # Check if indexes already exist
-    if Path(OUTPUT_FILES['indexes']).exists() and not force:
-        existing_indexes = list(Path(OUTPUT_FILES['indexes']).glob("cluster_*.index"))
-        if len(existing_indexes) > 0:
-            print(f"✅ Found {len(existing_indexes)} existing indexes. Skipping index building.")
-            print("   Use --force to rebuild.")
-            return
-    
-    # Load clustered data
-    plot_df = pd.read_pickle(OUTPUT_FILES['clustering'])
-    print(f"📊 Loaded {len(plot_df)} documents across {plot_df['cluster'].nunique()} clusters")
-    
-    # Initialize model
-    print(f"🤖 Loading embedding model: {EMBEDDING_MODEL_NAME}")
-    model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=OPTIMAL_DEVICE)
-    
-    # Create directories
-    os.makedirs(OUTPUT_FILES['indexes'], exist_ok=True)
-    os.makedirs(OUTPUT_FILES['embeddings'], exist_ok=True)
-    
-    # Process each cluster
-    clusters = sorted(plot_df['cluster'].unique())
-    successful_clusters = 0
-    
-    for i, cluster in enumerate(clusters):
-        print(f"\n🔧 Processing cluster {cluster} ({i+1}/{len(clusters)})...")
-        
-        cluster_df = plot_df[plot_df['cluster'] == cluster]
-        texts = cluster_df['text'].tolist()
-        ids = cluster_df['document_id'].tolist()
-        
-        print(f"   📄 {len(texts)} documents in cluster {cluster}")
-        
-        if len(texts) == 0:
-            print(f"   ⚠️ Skipping empty cluster {cluster}")
-            continue
-        
-        try:
-            # Generate embeddings
-            print(f"   🧮 Generating embeddings...")
-            embeddings = model.encode(texts, batch_size=1, show_progress_bar=False)
-            
-            # Create FAISS index
-            print(f"   🔍 Creating FAISS index...")
-            index = faiss.IndexFlatL2(embeddings.shape[1])
-            index.add(embeddings.astype(np.float32))
-            
-            # Save files
-            index_path = f"{OUTPUT_FILES['indexes']}/cluster_{cluster}.index"
-            emb_path = f"{OUTPUT_FILES['embeddings']}/cluster_{cluster}.pkl"
-            
-            faiss.write_index(index, index_path)
-            with open(emb_path, "wb") as f:
-                pickle.dump({'texts': texts, 'ids': ids}, f)
-            
-            print(f"   ✅ Saved index ({embeddings.shape[1]}D) and metadata")
-            successful_clusters += 1
-            
-            # Upload to Azure (ignore errors) unless in offline mode
-            if not OFFLINE_MODE:
-                try:
-                    upload_blob(AZURE_CONTAINER_NAME, f"indexes/cluster_{cluster}.index", index_path)
-                    upload_blob(AZURE_CONTAINER_NAME, f"embeddings/cluster_{cluster}.pkl", emb_path)
-                except Exception as e:
-                    print(f"   ⚠️ Azure upload failed (continuing): {e}")
-            else:
-                print(f"   🔌 Offline mode: Skipping Azure upload for cluster {cluster}")
-            
-            # Clear memory
-            del embeddings, index
-            gc.collect()
-            
-        except Exception as e:
-            print(f"   ❌ Error processing cluster {cluster}: {e}")
-            traceback.print_exc()
-            continue
-    
-    print(f"\n✅ Index building complete! Successfully built {successful_clusters}/{len(clusters)} indexes")
-
 def build_enhanced_indexes(force=False):
     """Build enhanced FAISS indexes for ultra-fast RAG mode."""
-    print_step("3b", 4, "Building Enhanced Indexes (Ultra-Fast RAG)")
+    print_step(3, 4, "Building Enhanced Indexes (Ultra-Fast RAG)")
     
     # Check if enhanced indexes already exist
     enhanced_dir = Path("indexes_enhanced")
@@ -1039,15 +952,11 @@ def main():
     parser.add_argument('--skip-clustering', action='store_true',
                        help='Skip clustering step')
     parser.add_argument('--skip-indexing', action='store_true',
-                       help='Skip FAISS indexing step')
-    parser.add_argument('--skip-enhanced', action='store_true',
-                       help='Skip enhanced indexing for ultra-fast RAG')
+                       help='Skip enhanced FAISS indexing step')
     parser.add_argument('--skip-app', action='store_true',
                        help='Skip launching the Streamlit app')
     parser.add_argument('--force', action='store_true',
                        help='Force reprocessing even if output files exist')
-    parser.add_argument('--enhanced-only', action='store_true',
-                       help='Build only enhanced indexes (skip standard indexes)')
     parser.add_argument('--offline', action='store_true',
                        help='Run in offline mode (skip all Azure uploads)')
     
@@ -1088,19 +997,11 @@ def main():
         else:
             print_step(2, 4, "Document Clustering (SKIPPED)")
         
-        # Step 3: Index Building
-        if not args.skip_indexing and not args.enhanced_only:
-            build_indexes(force=args.force)
-        elif args.enhanced_only:
-            print_step(3, 4, "Standard FAISS Index Building (SKIPPED - Enhanced Only Mode)")
-        else:
-            print_step(3, 4, "FAISS Index Building (SKIPPED)")
-        
-        # Step 3b: Enhanced Index Building (Ultra-Fast RAG)
-        if not args.skip_enhanced:
+        # Step 3: Enhanced Index Building (Ultra-Fast RAG)
+        if not args.skip_indexing:
             build_enhanced_indexes(force=args.force)
         else:
-            print_step("3b", 4, "Enhanced Index Building (SKIPPED)")
+            print_step(3, 4, "Enhanced Index Building (SKIPPED)")
         
         # Step 4: Launch App
         if not args.skip_app:
@@ -1131,15 +1032,11 @@ def main():
         print("  🔌 Files stored locally (offline mode)")
     
     # Check what was built
-    standard_indexes = len(list(Path(OUTPUT_FILES['indexes']).glob("cluster_*.index"))) if Path(OUTPUT_FILES['indexes']).exists() else 0
     enhanced_indexes = len(list(Path("indexes_enhanced").glob("cluster_*_chunks.index"))) if Path("indexes_enhanced").exists() else 0
     
     if enhanced_indexes > 0:
         print("  ⚡ Ultra-fast RAG enabled! Queries will be 5-20x faster")
-        print("  🎛️ Switch between standard and ultra-fast modes in the app")
-    
-    if standard_indexes > 0:
-        print(f"  🔍 Standard indexes: {standard_indexes} clusters")
+        print("  ✅ Enhanced-only retrieval mode is active")
     if enhanced_indexes > 0:
         print(f"  ⚡ Enhanced indexes: {enhanced_indexes} clusters")
 
