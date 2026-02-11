@@ -15,7 +15,7 @@ unfccc/
 └── *.py                   # Backward-compatible root wrappers
 ```
 
-## Setup
+## Setup (Linux/macOS/Windows)
 
 ```bash
 git clone <repo-url>
@@ -25,6 +25,13 @@ conda activate unfccc_env
 ```
 
 Configure `OPENAI_API_KEY` via environment variable or `.streamlit/secrets.toml`.
+
+Compatibility notes:
+
+- `environment.yml` and `requirements.txt` are now the default cross-platform setup.
+- `requirements.txt` is UTF-8 encoded (pip-safe on all OSes).
+- Optional GPU extras are in `requirements-gpu.txt`.
+- `pdfkit` requires `wkhtmltopdf` installed on the host if you want PDF export features.
 
 Optional check:
 

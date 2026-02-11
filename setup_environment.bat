@@ -68,14 +68,16 @@ if /i not "%CURRENT_DIR%"=="unfccc" (
 REM Detect NVIDIA GPU presence
 echo.
 echo 🔍 Detecting GPU hardware...
+set ENV_FILE=environment.yml
+set GPU_PRESENT=0
 nvidia-smi >nul 2>nul
 if %errorlevel% equ 0 (
-    set ENV_FILE=environment.yml
-    echo 🚀 NVIDIA GPU detected - using full environment with CUDA support
+    set GPU_PRESENT=1
+    echo 🚀 NVIDIA GPU detected
+    echo 💡 Base setup remains cross-platform CPU-safe; install optional GPU extras after setup:
+    echo    pip install -r requirements-gpu.txt
 ) else (
-    set ENV_FILE=environment-cpu.yml
-    echo 💻 No NVIDIA GPU detected - using CPU-optimized environment
-    echo 💡 This will avoid CUDA dependency issues
+    echo 💻 No NVIDIA GPU detected - using standard cross-platform environment
 )
 
 REM Create environment from appropriate yml file
@@ -203,6 +205,11 @@ echo 💡 Quick Start:
 echo    activate.bat                       # Activate environment
 echo    streamlit run cluster_qa_app.py    # Start the app
 echo.
+if "%GPU_PRESENT%"=="1" (
+    echo ⚙️  Optional GPU extras:
+    echo    pip install -r requirements-gpu.txt
+    echo.
+)
 echo 🔍 Debug Mode:
 echo    Use UNFCCC-Debug.bat shortcut      # Auto-enable debugging
 echo    python debug_demo.py               # Test debug system
