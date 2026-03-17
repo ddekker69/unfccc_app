@@ -19,8 +19,11 @@ authors:
     given-names: "David"
 repository-code: "https://github.com/ddekker69/unfccc_app"
 license: "MIT"
-version: "0.1.0"
+version: "1.0.0"
+doi: 10.5281/zenodo.19071003
 date-released: "2026-03-17"
+repository-code: "https://github.com/ddekker69/unfccc_app"
+url: "https://doi.org/10.5281/zenodo.19071003"
 abstract: "Prototype application for bounded assistive support in UNFCCC negotiations, including provenance-linked retrieval, multilingual support, clause comparison, and structured extraction."
 keywords:
   - UNFCCC
