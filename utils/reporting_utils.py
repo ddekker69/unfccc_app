@@ -56,6 +56,7 @@ def visualize_signed_graph_pyvis(
     edge_df: pd.DataFrame,
     output_path: str = "graphs/interactive_signed_graph.html",
     physics_config: dict = None,
+    node_attrs: dict | None = None,
 ) -> Network:
     net = Network(
         height="600px",
@@ -69,15 +70,18 @@ def visualize_signed_graph_pyvis(
     edge_df['source'] = edge_df['source'].astype(str)
     edge_df['target'] = edge_df['target'].astype(str)
     nodes = set(edge_df['source']).union(set(edge_df['target']))
+    node_attrs = node_attrs or {}
 
     for node in nodes:
+        attrs = node_attrs.get(node, {})
         net.add_node(
             node,
-            label=node,
+            label=attrs.get("label", node),
+            title=attrs.get("title"),
             shape="dot",
-            size=15,
+            size=attrs.get("size", 15),
             font={"size": 16, "color": "black"},
-            color="#7FC97F"
+            color=attrs.get("color", "#7FC97F")
         )
 
     for _, row in edge_df.iterrows():

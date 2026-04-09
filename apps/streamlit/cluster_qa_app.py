@@ -16,7 +16,13 @@ warnings.filterwarnings("ignore", message=".*path.*")
 
 # Redirect stderr to suppress C++ level warnings
 import sys
+from pathlib import Path
 from io import StringIO
+
+# Ensure direct `streamlit run apps/streamlit/cluster_qa_app.py` can import repo modules.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 class WarningFilter:
     def __init__(self, original_stderr):
@@ -526,6 +532,137 @@ def get_cluster_embeddings(df: pd.DataFrame) -> dict[int, np.ndarray]:
         embs = model.encode(texts, show_progress_bar=False)
         cluster_embeddings[cid] = np.mean(embs, axis=0)
     return cluster_embeddings
+
+@st.cache_data(show_spinner="Computing country embeddings for selected clusters…")
+def get_country_embeddings_for_cluster_pair(df: pd.DataFrame, cluster_a, cluster_b) -> tuple[dict[str, np.ndarray], dict[str, int]]:
+    """Aggregate texts by country within two clusters and return node embeddings plus cluster membership."""
+    model = load_embedding_model()
+    cluster_df = df.loc[df["cluster"].isin([cluster_a, cluster_b])].copy()
+
+    if cluster_df.empty:
+        return {}, {}
+
+    cluster_df = cluster_df.dropna(subset=["country", "text"])
+    cluster_df["country"] = cluster_df["country"].astype(str).str.strip()
+    cluster_df = cluster_df[cluster_df["country"] != ""]
+
+    if cluster_df.empty:
+        return {}, {}
+
+    country_embeddings = {}
+    node_cluster_map = {}
+
+    for (cluster_id_value, country), texts in cluster_df.groupby(["cluster", "country"])["text"]:
+        text_list = texts.astype(str).tolist()
+        if not text_list:
+            continue
+        embs = model.encode(text_list, show_progress_bar=False)
+        node_id = f"{country} [C{cluster_id_value}]"
+        country_embeddings[node_id] = np.mean(embs, axis=0)
+        node_cluster_map[node_id] = cluster_id_value
+
+    return country_embeddings, node_cluster_map
+
+def build_inter_cluster_signed_edges(sim_df: pd.DataFrame, node_cluster_map: dict[str, int], threshold_high: float, threshold_low: float) -> pd.DataFrame:
+    """Build a signed edge list using only edges between the two selected clusters."""
+    edges = []
+    for source in sim_df.index:
+        for target in sim_df.columns:
+            if source >= target:
+                continue
+            if node_cluster_map.get(source) == node_cluster_map.get(target):
+                continue
+
+            sim = sim_df.loc[source, target]
+            if sim >= threshold_high:
+                sign = 1
+            elif sim <= threshold_low:
+                sign = -1
+            else:
+                sign = 0
+
+            edges.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "similarity": sim,
+                    "sign": sign,
+                    "source_cluster": node_cluster_map.get(source),
+                    "target_cluster": node_cluster_map.get(target),
+                }
+            )
+
+    return pd.DataFrame(edges)
+
+def _edge_strength(edge_df: pd.DataFrame) -> pd.Series:
+    """Rank positive edges by similarity and negative edges by dissimilarity."""
+    return np.where(edge_df["sign"] == 1, edge_df["similarity"], 1.0 - edge_df["similarity"])
+
+def filter_cluster_graph_for_display(
+    edge_df: pd.DataFrame,
+    selected_cluster,
+    render_scope: str,
+    sign_filter: str,
+    max_neighbors: int,
+    max_edges: int,
+) -> pd.DataFrame:
+    """Reduce the signed edge list to a usable display subset."""
+    filtered = edge_df[edge_df["sign"] != 0].copy()
+
+    if sign_filter == "Positive only":
+        filtered = filtered[filtered["sign"] == 1]
+    elif sign_filter == "Negative only":
+        filtered = filtered[filtered["sign"] == -1]
+
+    if filtered.empty:
+        return filtered
+
+    filtered["render_strength"] = _edge_strength(filtered)
+    selected_cluster = str(selected_cluster)
+    filtered["source"] = filtered["source"].astype(str)
+    filtered["target"] = filtered["target"].astype(str)
+
+    incident = filtered[
+        (filtered["source"] == selected_cluster) | (filtered["target"] == selected_cluster)
+    ].copy()
+
+    if render_scope == "Edges Touching Selected Cluster":
+        filtered = incident
+    elif render_scope == "Selected Cluster Neighborhood":
+        if incident.empty:
+            return incident
+        incident["neighbor"] = np.where(
+            incident["source"] == selected_cluster, incident["target"], incident["source"]
+        )
+        top_neighbors = (
+            incident.sort_values("render_strength", ascending=False)["neighbor"]
+            .drop_duplicates()
+            .head(max_neighbors)
+            .tolist()
+        )
+        visible_nodes = {selected_cluster, *top_neighbors}
+        filtered = filtered[
+            filtered["source"].isin(visible_nodes) & filtered["target"].isin(visible_nodes)
+        ].copy()
+
+    filtered = filtered.sort_values("render_strength", ascending=False).head(max_edges).copy()
+    return filtered.drop(columns=["render_strength"], errors="ignore")
+
+def build_cluster_node_attrs(df: pd.DataFrame, node_ids: list[str], selected_cluster) -> dict[str, dict]:
+    """Create readable labels and size/color metadata for rendered cluster nodes."""
+    counts = df["cluster"].value_counts().to_dict()
+    selected_cluster = str(selected_cluster)
+    attrs = {}
+    for node_id in node_ids:
+        cluster_key = int(node_id) if str(node_id).lstrip("-").isdigit() else node_id
+        doc_count = counts.get(cluster_key, 0)
+        attrs[str(node_id)] = {
+            "label": str(node_id),
+            "title": f"Cluster {node_id}: {doc_count} documents",
+            "size": 18 if str(node_id) == selected_cluster else max(12, min(32, 10 + int(doc_count / 3))),
+            "color": "#4C78A8" if str(node_id) == selected_cluster else "#7FC97F",
+        }
+    return attrs
 
 # Enhanced answer generation functions that use PromptTemplate system
 def enhanced_answer_question(question, cluster_id, model_name, response_format_enum, top_k=5, max_tokens=4000, year_range=None):
@@ -1669,14 +1806,102 @@ if st.button("Generate Cross-Cluster Report"):
             with open(edge_list_csv, "rb") as f_csv:
                 st.download_button("⬇ Download Edge List (CSV)", f_csv, file_name=os.path.basename(edge_list_csv))
 
+st.subheader("🔀 Cross-Cluster Country Similarity Graph")
+
+cross_left, cross_right = st.columns([1, 2])
+
+with cross_left:
+    st.caption(
+        f"Nodes represent country profiles from cluster `{cluster_a}` and cluster `{cluster_b}`. "
+        "Only edges between the two clusters are considered."
+    )
+    cross_threshold_high = st.slider(
+        "Cross-Cluster Positive Threshold",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.7,
+        step=0.05,
+        key="cross_threshold_high",
+    )
+    cross_threshold_low = st.slider(
+        "Cross-Cluster Negative Threshold",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.3,
+        step=0.05,
+        key="cross_threshold_low",
+    )
+
+    if st.button("Generate Cross-Cluster Graph"):
+        if cluster_a == cluster_b:
+            st.warning("Please select two different clusters.")
+        else:
+            country_embeddings, node_cluster_map = get_country_embeddings_for_cluster_pair(df, cluster_a, cluster_b)
+            if len(country_embeddings) < 2:
+                st.warning("Not enough country-level nodes were found across the two selected clusters.")
+                st.session_state.pop("cross_graph_path", None)
+                st.session_state.pop("cross_signed_edges", None)
+            else:
+                sim_df = compute_similarity_matrix(country_embeddings)
+                signed_edges = build_inter_cluster_signed_edges(
+                    sim_df,
+                    node_cluster_map,
+                    threshold_high=cross_threshold_high,
+                    threshold_low=cross_threshold_low,
+                )
+
+                cluster_colors = {cluster_a: "#4C78A8", cluster_b: "#F58518"}
+                node_attrs = {
+                    node: {
+                        "label": node,
+                        "title": f"Cluster {node_cluster_map[node]}",
+                        "color": cluster_colors.get(node_cluster_map[node], "#7FC97F"),
+                    }
+                    for node in country_embeddings.keys()
+                }
+
+                graph_path = f"reports/cross_cluster_country_graph_{cluster_a}_{cluster_b}.html"
+                visualize_signed_graph_pyvis(
+                    signed_edges,
+                    output_path=graph_path,
+                    node_attrs=node_attrs,
+                )
+
+                st.session_state["cross_graph_path"] = graph_path
+                st.session_state["cross_signed_edges"] = signed_edges
+                st.session_state["cross_graph_summary"] = (
+                    f"Clusters {cluster_a} vs {cluster_b}, {len(country_embeddings)} country nodes"
+                )
+                st.success("✅ Cross-cluster country graph generated.")
+
+with cross_right:
+    if "cross_graph_path" in st.session_state:
+        st.caption(st.session_state.get("cross_graph_summary", ""))
+        with open(st.session_state["cross_graph_path"], "r", encoding="utf-8") as f:
+            html_content = f.read()
+        st.components.v1.html(html_content, height=600, scrolling=True)
+
 # ================================
 # 🌐 Signed Similarity Graph
 # ================================
-st.subheader("🔗 Signed Similarity Graph by Cluster")
+st.subheader("🔗 Signed Similarity Graph Across All Clusters")
 
 col_left, col_right = st.columns([1, 2])
 
 with col_left:
+    st.caption("Nodes represent cluster IDs from the current dataset, not countries inside the selected cluster.")
+    render_scope = st.selectbox(
+        "Render Scope",
+        ["Selected Cluster Neighborhood", "Edges Touching Selected Cluster", "All Clusters"],
+        index=0,
+    )
+    sign_filter = st.selectbox(
+        "Edge Filter",
+        ["Both Signs", "Positive only", "Negative only"],
+        index=0,
+    )
+    max_neighbors = st.slider("Max Neighbor Clusters", 3, 30, 12, step=1)
+    max_edges = st.slider("Max Rendered Edges", 10, 250, 80, step=10)
     st.markdown("#### 🎚 Threshold Settings")
     threshold_high = st.slider("Similarity Threshold (positive tie)", min_value=0.0, max_value=1.0, value=0.7, step=0.05)
     threshold_low = st.slider("Similarity Threshold (negative tie)", min_value=0.0, max_value=1.0, value=0.3, step=0.05)
@@ -1687,24 +1912,24 @@ with col_left:
     damping = st.slider("Damping", 0.0, 1.0, 0.09, step=0.01)
 
     if st.button("Generate Graph"):
-        # 1️⃣ retrieve embeddings (cached unless df changed)
         cluster_embeddings = get_cluster_embeddings(df)
-
-        # 2️⃣ build similarity matrix
         sim_df = compute_similarity_matrix(cluster_embeddings)
-
-        # 3️⃣ build signed edge list with current thresholds
         signed_edges = compute_signed_edge_list(
             sim_df,
             threshold_high=threshold_high,
             threshold_low=threshold_low
         )
+        display_edges = filter_cluster_graph_for_display(
+            signed_edges,
+            selected_cluster=cluster_id,
+            render_scope=render_scope,
+            sign_filter=sign_filter,
+            max_neighbors=max_neighbors,
+            max_edges=max_edges,
+        )
 
-        # from utils.similarity_engine import run_signed_graph_pipeline
-        # from utils.reporting_utils import visualize_signed_graph_pyvis
-
-        # Compute graph and save in session state
-        # sim_df, signed_edges = run_signed_graph_pipeline(df, threshold_high, threshold_low)
+        visible_nodes = sorted(set(display_edges["source"]).union(display_edges["target"])) if not display_edges.empty else []
+        node_attrs = build_cluster_node_attrs(df, visible_nodes, selected_cluster=cluster_id)
 
         graph_path = f"reports/signed_graph_{'country' if clustering_mode == 'Country-level' else 'document'}.html"
         physics_config = {
@@ -1712,23 +1937,42 @@ with col_left:
             "springStrength": spring_strength,
             "damping": damping
         }
-        net = visualize_signed_graph_pyvis(signed_edges, output_path=graph_path, physics_config=physics_config)
+        visualize_signed_graph_pyvis(
+            display_edges,
+            output_path=graph_path,
+            physics_config=physics_config,
+            node_attrs=node_attrs,
+        )
 
-        st.session_state['graph_path'] = graph_path
-        st.session_state['signed_edges'] = signed_edges
-        st.session_state['sim_df'] = sim_df
-        st.success("✅ Signed graph generated.")
+        st.session_state['global_graph_path'] = graph_path
+        st.session_state['global_signed_edges'] = display_edges
+        st.session_state['global_sim_df'] = sim_df
+        st.session_state['global_graph_node_count'] = len(visible_nodes)
+        st.session_state['global_graph_edge_count'] = len(display_edges[display_edges["sign"] != 0]) if not display_edges.empty else 0
+        st.session_state['global_graph_scope'] = render_scope
+        if display_edges.empty:
+            st.warning("No edges matched the current filters. Try widening the thresholds or changing the scope.")
+        else:
+            st.success(
+                f"✅ Filtered cluster graph generated with {len(visible_nodes)} nodes and "
+                f"{len(display_edges[display_edges['sign'] != 0])} edges."
+            )
 
 with col_right:
-    if 'graph_path' in st.session_state:
-        with open(st.session_state['graph_path'], "r", encoding="utf-8") as f:
+    if 'global_graph_path' in st.session_state:
+        st.caption(
+            f"Scope: {st.session_state.get('global_graph_scope', 'Unknown')} | "
+            f"Displaying {st.session_state.get('global_graph_node_count', 0)} nodes and "
+            f"{st.session_state.get('global_graph_edge_count', 0)} edges."
+        )
+        with open(st.session_state['global_graph_path'], "r", encoding="utf-8") as f:
             html_content = f.read()
         st.components.v1.html(html_content, height=600, scrolling=True)
 
-    if 'signed_edges' in st.session_state:
+    if 'global_signed_edges' in st.session_state:
         # Reconstruct signed graph from edge list
         G_signed = nx.Graph()
-        for _, row in st.session_state['signed_edges'].iterrows():
+        for _, row in st.session_state['global_signed_edges'].iterrows():
             if row['sign'] != 0:
                 G_signed.add_edge(row['source'], row['target'], sign=row['sign'])
         print(G_signed.degree)
